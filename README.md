@@ -13,9 +13,31 @@ Real-time quote-stability model powered by Coinbase WebSocket data and Plotly Da
 ## Quick Start
 
 ```bash
-docker-compose up -d
-python -m src.run_live --symbol BTC-USD
+# Create virtual environment
+pyenv virtualenv 3.11 quotewatch
+pyenv local quotewatch
+
+# Install package
+pip install -e .
+
+# Run live dashboard
+python -m src.run_live
 open http://localhost:8050
+```
+
+## Development Setup
+
+```bash
+# Install with dev dependencies
+pip install -e ".[dev]"
+
+# Linting/formatting
+black .
+ruff check .
+mypy src/
+
+# Tests
+pytest -v
 ```
 
 ## Repo Layout
