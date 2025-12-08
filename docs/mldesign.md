@@ -1,106 +1,124 @@
 # ML Design
 
-Technical design document for the quote-stability prediction model.
+Technical design document for the price change prediction model.
 
 ## Problem Statement
 
-Predict whether the mid-price will change by more than a threshold within the next $\Delta$ milliseconds.
+Predict whether the mid-price will change by more than a threshold within the next Δ milliseconds.
 
 ## Label Definition
 
-$$
-y(t) = \begin{cases}
-1 & \text{if } \left| \text{mid}(t + \Delta) - \text{mid}(t) \right| > \tau \\
-0 & \text{otherwise}
-\end{cases}
-$$
+```
+y(t) = 1 if |mid(t + Δ) - mid(t)| > τ
+       0 otherwise
+```
 
 Where:
-- $\Delta = 500\text{ms}$ (prediction horizon)
-- $\tau = 0.01\%$ of mid-price (threshold, configurable)
+- Δ = 500ms (prediction horizon)
+- τ = 0.01% of mid-price (threshold)
 
-## Feature List
+## Feature List (Current Implementation)
 
 | Feature | Formula | Description |
 |---------|---------|-------------|
-| `spread` | $p_a^{(1)} - p_b^{(1)}$ | Best ask minus best bid |
-| `spread_bps` | $\frac{\text{spread}}{\text{mid}} \times 10^4$ | Spread in basis points |
-| `mid_price` | $\frac{p_b^{(1)} + p_a^{(1)}}{2}$ | Mid-price |
-| `imbalance` | $\frac{V_b - V_a}{V_b + V_a}$ | Order book imbalance |
-| `bid_depth_3` | $\sum_{i=1}^{3} v_b^{(i)}$ | Sum of top-3 bid volumes |
-| `ask_depth_3` | $\sum_{i=1}^{3} v_a^{(i)}$ | Sum of top-3 ask volumes |
-| `price_velocity` | $\frac{d(\text{mid})}{dt}$ | Mid-price change rate |
-| `spread_volatility` | $\sigma(\text{spread})_n$ | Rolling std of spread |
-| `trade_imbalance` | $\frac{V_{\text{buy}} - V_{\text{sell}}}{V_{\text{total}}}$ | Recent trade direction |
+| `spread_bps` | `(ask - bid) / mid × 10000` | Spread in basis points |
+| `imbalance` | `(bid_vol - ask_vol) / (bid_vol + ask_vol)` | Order book imbalance at top level (-1 to 1) |
+| `depth` | `Σ bid_vol + Σ ask_vol` | Total volume at top-3 levels |
+| `volatility` | `std(mid_price_changes)` | Rolling volatility of mid-price (bps) |
 
-## Models
+### Future Features (Not Yet Implemented)
 
-### Baseline: SGDClassifier
+| Feature | Description |
+|---------|-------------|
+| `price_velocity` | Mid-price change rate |
+| `spread_volatility` | Rolling std of spread |
+| `trade_imbalance` | Recent trade direction |
 
-Stochastic Gradient Descent with log-loss:
+## Model
 
-$$
-\mathcal{L}(\mathbf{w}) = -\frac{1}{N} \sum_{i=1}^{N} \left[ y_i \log(\hat{y}_i) + (1-y_i) \log(1-\hat{y}_i) \right] + \alpha \|\mathbf{w}\|_2^2
-$$
+### Current: SGDClassifier (Online Learning)
 
-- Online learning capable
+Stochastic Gradient Descent with log-loss for online learning:
+
+```python
+SGDClassifier(
+    loss="log_loss",
+    learning_rate="constant",
+    eta0=0.01,
+    warm_start=True,
+    random_state=42,
+)
+```
+
+**Properties:**
+- Online learning via `partial_fit()`
 - Fast inference (~1ms)
-- Interpretable coefficients
+- Interpretable coefficients (shown in dashboard)
+- Trains continuously from live data
 
-### Production: XGBoost
+### Scaler: StandardScaler (Online)
 
-Gradient boosted trees with:
-- `max_depth` $= 4$
-- `n_estimators` $= 100$
-- `learning_rate` $= 0.1$
+Features are normalized using incremental StandardScaler:
+- Updated via `partial_fit()` alongside model
+- Maintains running mean and variance
+
+### Model Readiness
+
+Model is considered "ready" after:
+- 100 samples of class 0 (no change)
+- 100 samples of class 1 (price changed)
+
+Before ready, model outputs 0.5 probability (uncertain).
+
+## Accuracy Tracking
+
+### Temporal Alignment Problem
+
+Predictions are made at time T, but labels are only known at time T+Δ. Solution:
+
+1. At time T: Make prediction, store it with features in Labeler buffer
+2. At time T+Δ: Label computed, matched with stored prediction
+3. Call `record_prediction(predicted, actual)` to track accuracy
+
+### Rolling Accuracy
+
+- Tracks last 100 (prediction, actual) pairs
+- Accuracy = correct predictions / total predictions
+- Displayed in Model Insights panel
 
 ## Evaluation Metrics
 
-| Metric | Formula | Target |
-|--------|---------|--------|
-| Balanced Accuracy | $\frac{1}{2}\left(\frac{TP}{P} + \frac{TN}{N}\right)$ | $\geq 0.55$ |
-| AUC-ROC | $\int_0^1 \text{TPR}(t) \, d\text{FPR}(t)$ | $\geq 0.58$ |
-| Brier Score | $\frac{1}{N}\sum_{i=1}^{N}(\hat{p}_i - y_i)^2$ | $\leq 0.25$ |
+| Metric | Target | Status |
+|--------|--------|--------|
+| Accuracy | > 50% (better than random) | Live tracking |
+| Balanced Accuracy | ≥ 0.55 | Future |
+| AUC-ROC | ≥ 0.58 | Future |
+| Brier Score | ≤ 0.25 | Future |
 
-## Class Imbalance
+## Class Balance
 
-Expected class distribution:
-- $P(y=0) \approx 0.7$ (no change)
-- $P(y=1) \approx 0.3$ (change)
+The Labeler naturally produces imbalanced classes:
+- More "no change" (0) samples than "change" (1)
+- Dashboard shows live class counts
+- Future: class weights for SGDClassifier
 
-Handled via:
-- Class weights: $w_c = \frac{N}{2 \cdot N_c}$
+## Training Pipeline (Current)
+
+**Online Training** (no batch training needed):
+
+1. WebSocket update arrives
+2. Feature Extractor computes features from order book
+3. Classifier predicts P(change) for current features
+4. Labeler buffers sample with prediction
+5. After Δ=500ms, Labeler emits labeled sample
+6. Classifier.partial_fit() updates model
+7. Classifier.record_prediction() tracks accuracy
+
+## Future Improvements
+
+- XGBoost for offline batch training
+- Parquet data persistence for replay
 - Balanced accuracy metric
-- Stratified train/test splits
-
-## Training Pipeline
-
-1. Load features $\mathbf{X}$ and labels $\mathbf{y}$ from Parquet
-2. Time-based split: $t < t_{\text{split}}$ for train
-3. Fit scaler: $\tilde{x} = \frac{x - \mu}{\sigma}$
-4. Train model with class weights
-5. Evaluate on held-out test set
-6. Deploy if metrics exceed threshold
-
-## Model Artifacts
-
-```
-models/
-  current.pkl          # Serialized model
-  feature_spec.json    # Feature names + order
-  scaler.pkl           # Fitted StandardScaler
-  metrics.json         # Evaluation metrics
-```
-
-## Retraining Schedule
-
-- **MVP**: Manual trigger
-- **Future**: Daily cron with auto-deploy if $\text{AUC}_{\text{new}} > \text{AUC}_{\text{current}}$
-
-## Inference Pipeline
-
-1. Receive feature vector $\mathbf{x}(t)$ from tick buffer
-2. Apply scaler: $\tilde{\mathbf{x}} = \frac{\mathbf{x} - \mu}{\sigma}$
-3. Predict: $\hat{p} = P(y=1 | \tilde{\mathbf{x}})$
-4. Publish to snapshot store
-5. Log prediction to Parquet
+- Class weights
+- Model hot-reload from artifacts
+- Feature importance analysis
