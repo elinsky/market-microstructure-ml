@@ -9,10 +9,11 @@
 - [x] Cloud Run deployment
 - [x] Heuristic stability indicator
 - [x] OHLC candlestick chart
-- [ ] Labeler (Δ=500ms) - #26
-- [ ] Baseline model (SGDClassifier) - #27
-- [ ] Online inference pipeline - #29
-- [ ] ML prediction display - #28
+- [x] Labeler (Δ=500ms) - #26
+- [x] Baseline model (SGDClassifier) - #27
+- [x] Online inference pipeline - #29
+- [x] ML prediction display - #28
+- [x] Model Insights panel - #31
 
 ## Week 2 - Polish & Extend
 

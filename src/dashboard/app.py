@@ -18,10 +18,19 @@ _shared_state: Dict[str, Any] = {
     "imbalance": None,
     "depth": None,
     "volatility": None,
-    # Stability state
+    # Stability state (heuristic - will be replaced by ML)
     "stability_score": None,
     "stability_category": None,
     "stability_color": None,
+    # ML prediction state
+    "prediction_proba": None,  # 0.0 to 1.0
+    "model_ready": False,
+    "model_samples_total": 0,
+    "model_samples_no_change": 0,
+    "model_samples_change": 0,
+    "model_ready_pct": 0.0,
+    "model_accuracy": None,
+    "model_weights": None,  # Dict of feature -> weight
 }
 
 
@@ -57,6 +66,15 @@ def update_shared_state(
     stability_score: Optional[float] = None,
     stability_category: Optional[str] = None,
     stability_color: Optional[str] = None,
+    # ML prediction fields
+    prediction_proba: Optional[float] = None,
+    model_ready: bool = False,
+    model_samples_total: int = 0,
+    model_samples_no_change: int = 0,
+    model_samples_change: int = 0,
+    model_ready_pct: float = 0.0,
+    model_accuracy: Optional[float] = None,
+    model_weights: Optional[Dict[str, float]] = None,
 ) -> None:
     """Update shared state from WebSocket client.
 
@@ -73,6 +91,14 @@ def update_shared_state(
         stability_score: Overall stability score (0-100).
         stability_category: STABLE, MODERATE, or UNSTABLE.
         stability_color: green, yellow, or red.
+        prediction_proba: ML prediction probability (0.0 to 1.0).
+        model_ready: Whether model has enough training data.
+        model_samples_total: Total training samples seen.
+        model_samples_no_change: Samples with label 0.
+        model_samples_change: Samples with label 1.
+        model_ready_pct: Percentage to ready state (0-100).
+        model_accuracy: Recent prediction accuracy.
+        model_weights: Feature weights from model.
     """
     _shared_state["best_bid"] = best_bid
     _shared_state["best_ask"] = best_ask
@@ -86,6 +112,16 @@ def update_shared_state(
     _shared_state["stability_score"] = stability_score
     _shared_state["stability_category"] = stability_category
     _shared_state["stability_color"] = stability_color
+
+    # ML prediction state
+    _shared_state["prediction_proba"] = prediction_proba
+    _shared_state["model_ready"] = model_ready
+    _shared_state["model_samples_total"] = model_samples_total
+    _shared_state["model_samples_no_change"] = model_samples_no_change
+    _shared_state["model_samples_change"] = model_samples_change
+    _shared_state["model_ready_pct"] = model_ready_pct
+    _shared_state["model_accuracy"] = model_accuracy
+    _shared_state["model_weights"] = model_weights
 
     # Build OHLC candles from mid prices
     if mid_price is not None:
@@ -131,31 +167,31 @@ def create_app() -> Dash:
     app.layout = html.Div(
         [
             html.H1("QuoteWatch - BTC-USD Live", style={"textAlign": "center"}),
-            # Stability Indicator (prominent)
+            # ML Prediction Indicator (prominent)
             html.Div(
                 [
                     html.Div(
                         [
                             html.Div(
-                                id="stability-score",
+                                id="prediction-value",
                                 children="--",
                                 style={
-                                    "fontSize": "48px",
+                                    "fontSize": "42px",
                                     "fontWeight": "bold",
                                     "lineHeight": "1",
                                 },
                             ),
                             html.Div(
-                                id="stability-category",
-                                children="LOADING",
+                                id="prediction-label",
+                                children="Loading...",
                                 style={
-                                    "fontSize": "18px",
+                                    "fontSize": "14px",
                                     "marginTop": "5px",
                                     "fontWeight": "500",
                                 },
                             ),
                         ],
-                        id="stability-indicator",
+                        id="prediction-indicator",
                         style={
                             "width": "140px",
                             "height": "140px",
@@ -170,7 +206,8 @@ def create_app() -> Dash:
                         },
                     ),
                     html.Div(
-                        "Quote Stability",
+                        id="prediction-subtitle",
+                        children="Price Change Probability",
                         style={
                             "textAlign": "center",
                             "marginTop": "10px",
@@ -338,6 +375,114 @@ def create_app() -> Dash:
                     "margin": "20px",
                 },
             ),
+            # Model Insights Panel
+            html.Div(
+                [
+                    html.H4(
+                        "Model Insights",
+                        style={"textAlign": "center", "marginBottom": "15px"},
+                    ),
+                    html.Div(
+                        [
+                            # Training Progress
+                            html.Div(
+                                [
+                                    html.Div(
+                                        "Training Progress",
+                                        style={
+                                            "fontSize": "12px",
+                                            "color": "#888",
+                                            "marginBottom": "8px",
+                                        },
+                                    ),
+                                    html.Div(
+                                        [
+                                            html.Div(
+                                                id="training-progress-bar",
+                                                style={
+                                                    "height": "8px",
+                                                    "backgroundColor": "#17a2b8",
+                                                    "borderRadius": "4px",
+                                                    "width": "0%",
+                                                },
+                                            ),
+                                        ],
+                                        style={
+                                            "width": "100%",
+                                            "backgroundColor": "#333",
+                                            "borderRadius": "4px",
+                                            "marginBottom": "5px",
+                                        },
+                                    ),
+                                    html.Div(
+                                        id="training-stats",
+                                        children="Waiting for data...",
+                                        style={"fontSize": "11px", "color": "#aaa"},
+                                    ),
+                                ],
+                                style={"flex": "1", "padding": "0 15px"},
+                            ),
+                            # Accuracy
+                            html.Div(
+                                [
+                                    html.Div(
+                                        "Accuracy (last 100)",
+                                        style={
+                                            "fontSize": "12px",
+                                            "color": "#888",
+                                            "marginBottom": "8px",
+                                        },
+                                    ),
+                                    html.Div(
+                                        id="accuracy-value",
+                                        children="--",
+                                        style={
+                                            "fontSize": "24px",
+                                            "fontWeight": "bold",
+                                        },
+                                    ),
+                                ],
+                                style={
+                                    "flex": "1",
+                                    "textAlign": "center",
+                                    "borderLeft": "1px solid #333",
+                                    "borderRight": "1px solid #333",
+                                    "padding": "0 15px",
+                                },
+                            ),
+                            # Feature Weights
+                            html.Div(
+                                [
+                                    html.Div(
+                                        "Feature Weights",
+                                        style={
+                                            "fontSize": "12px",
+                                            "color": "#888",
+                                            "marginBottom": "8px",
+                                        },
+                                    ),
+                                    dcc.Graph(
+                                        id="weights-chart",
+                                        config={"displayModeBar": False},
+                                        style={"height": "80px"},
+                                    ),
+                                ],
+                                style={"flex": "2", "padding": "0 15px"},
+                            ),
+                        ],
+                        style={
+                            "display": "flex",
+                            "alignItems": "flex-start",
+                        },
+                    ),
+                ],
+                style={
+                    "padding": "15px",
+                    "backgroundColor": "#16213e",
+                    "borderRadius": "10px",
+                    "margin": "20px",
+                },
+            ),
             # Timestamp
             html.Div(
                 id="timestamp",
@@ -363,14 +508,21 @@ def create_app() -> Dash:
             Output("spread-value", "children"),
             Output("timestamp", "children"),
             Output("price-chart", "figure"),
-            Output("stability-score", "children"),
-            Output("stability-category", "children"),
-            Output("stability-indicator", "style"),
+            Output("prediction-value", "children"),
+            Output("prediction-label", "children"),
+            Output("prediction-indicator", "style"),
+            Output("prediction-subtitle", "children"),
             Output("metric-spread", "children"),
             Output("metric-imbalance", "children"),
             Output("metric-imbalance", "style"),
             Output("metric-depth", "children"),
             Output("metric-volatility", "children"),
+            # Model Insights outputs
+            Output("training-progress-bar", "style"),
+            Output("training-stats", "children"),
+            Output("accuracy-value", "children"),
+            Output("accuracy-value", "style"),
+            Output("weights-chart", "figure"),
         ],
         [Input("interval-component", "n_intervals")],
     )
@@ -444,26 +596,45 @@ def create_app() -> Dash:
             },
         }
 
-        # Stability indicator
-        stability_score = _shared_state["stability_score"]
-        stability_category = _shared_state["stability_category"]
-        stability_color = _shared_state["stability_color"]
+        # ML Prediction indicator
+        prediction_proba = _shared_state["prediction_proba"]
+        model_ready = _shared_state["model_ready"]
+        model_samples = _shared_state["model_samples_total"]
+        model_ready_pct = _shared_state["model_ready_pct"]
 
-        score_str = f"{stability_score:.0f}" if stability_score is not None else "--"
-        category_str = stability_category if stability_category else "LOADING"
+        # Determine what to display
+        if model_ready and prediction_proba is not None:
+            # Model is ready - show prediction percentage
+            pred_pct = prediction_proba * 100
+            prediction_value_str = f"{pred_pct:.0f}%"
+            prediction_label_str = "Price Move"
+            subtitle_str = "in next 500ms"
 
-        # Map color names to actual colors
-        color_map = {
-            "green": "#28a745",
-            "yellow": "#ffc107",
-            "red": "#dc3545",
-        }
-        border_color = color_map.get(stability_color, "#444")
-        bg_color = (
-            f"rgba({int(border_color[1:3], 16)}, {int(border_color[3:5], 16)}, {int(border_color[5:7], 16)}, 0.2)"
-            if stability_color in color_map
-            else "#333"
-        )
+            # Color based on probability: low=green, medium=yellow, high=red
+            if pred_pct < 30:
+                border_color = "#28a745"  # Green - low probability
+            elif pred_pct < 60:
+                border_color = "#ffc107"  # Yellow - medium
+            else:
+                border_color = "#dc3545"  # Red - high probability
+        elif model_samples > 0:
+            # Model is training - show progress
+            prediction_value_str = f"{model_ready_pct:.0f}%"
+            prediction_label_str = "Training..."
+            subtitle_str = f"{model_samples} samples"
+            border_color = "#17a2b8"  # Blue - training
+        else:
+            # No data yet
+            prediction_value_str = "--"
+            prediction_label_str = "Waiting..."
+            subtitle_str = "Collecting data"
+            border_color = "#444"
+
+        # Compute background color from border color
+        if border_color != "#444":
+            bg_color = f"rgba({int(border_color[1:3], 16)}, {int(border_color[3:5], 16)}, {int(border_color[5:7], 16)}, 0.2)"
+        else:
+            bg_color = "#333"
 
         indicator_style = {
             "width": "140px",
@@ -499,6 +670,110 @@ def create_app() -> Dash:
             else:
                 imbalance_style["color"] = "white"
 
+        # Model Insights
+        model_samples_total = _shared_state["model_samples_total"]
+        model_samples_no_change = _shared_state["model_samples_no_change"]
+        model_samples_change = _shared_state["model_samples_change"]
+        model_ready_pct = _shared_state["model_ready_pct"]
+        model_accuracy = _shared_state["model_accuracy"]
+        model_weights = _shared_state["model_weights"]
+
+        # Training progress bar style
+        progress_bar_style = {
+            "height": "8px",
+            "backgroundColor": "#17a2b8" if model_ready_pct < 100 else "#28a745",
+            "borderRadius": "4px",
+            "width": f"{min(100, model_ready_pct):.0f}%",
+            "transition": "width 0.3s ease",
+        }
+
+        # Training stats text
+        if model_samples_total > 0:
+            training_stats_str = (
+                f"{model_samples_total} samples | "
+                f"No change: {model_samples_no_change} | "
+                f"Change: {model_samples_change}"
+            )
+        else:
+            training_stats_str = "Waiting for data..."
+
+        # Accuracy display
+        if model_accuracy is not None:
+            accuracy_str = f"{model_accuracy * 100:.1f}%"
+            # Color based on accuracy
+            if model_accuracy >= 0.6:
+                accuracy_color = "#28a745"  # Green
+            elif model_accuracy >= 0.5:
+                accuracy_color = "#ffc107"  # Yellow
+            else:
+                accuracy_color = "#dc3545"  # Red
+        else:
+            accuracy_str = "--"
+            accuracy_color = "white"
+
+        accuracy_style = {
+            "fontSize": "24px",
+            "fontWeight": "bold",
+            "color": accuracy_color,
+        }
+
+        # Feature weights chart
+        if model_weights and any(v != 0 for v in model_weights.values()):
+            feature_names = list(model_weights.keys())
+            weights = list(model_weights.values())
+            colors = ["#28a745" if w >= 0 else "#dc3545" for w in weights]
+
+            weights_chart = {
+                "data": [
+                    {
+                        "type": "bar",
+                        "x": weights,
+                        "y": feature_names,
+                        "orientation": "h",
+                        "marker": {"color": colors},
+                    }
+                ],
+                "layout": {
+                    "margin": {"l": 70, "r": 10, "t": 5, "b": 5},
+                    "paper_bgcolor": "rgba(0,0,0,0)",
+                    "plot_bgcolor": "rgba(0,0,0,0)",
+                    "xaxis": {
+                        "showgrid": True,
+                        "gridcolor": "rgba(255,255,255,0.1)",
+                        "zeroline": True,
+                        "zerolinecolor": "rgba(255,255,255,0.3)",
+                        "tickfont": {"color": "#666", "size": 9},
+                    },
+                    "yaxis": {
+                        "tickfont": {"color": "#aaa", "size": 9},
+                    },
+                    "height": 80,
+                },
+            }
+        else:
+            weights_chart = {
+                "data": [],
+                "layout": {
+                    "margin": {"l": 10, "r": 10, "t": 5, "b": 5},
+                    "paper_bgcolor": "rgba(0,0,0,0)",
+                    "plot_bgcolor": "rgba(0,0,0,0)",
+                    "xaxis": {"visible": False},
+                    "yaxis": {"visible": False},
+                    "annotations": [
+                        {
+                            "text": "Training...",
+                            "xref": "paper",
+                            "yref": "paper",
+                            "x": 0.5,
+                            "y": 0.5,
+                            "showarrow": False,
+                            "font": {"color": "#666", "size": 12},
+                        }
+                    ],
+                    "height": 80,
+                },
+            }
+
         return (
             bid_str,
             mid_str,
@@ -506,14 +781,21 @@ def create_app() -> Dash:
             spread_str,
             ts_str,
             price_chart,
-            score_str,
-            category_str,
+            prediction_value_str,
+            prediction_label_str,
             indicator_style,
+            subtitle_str,
             spread_bps_str,
             imbalance_str,
             imbalance_style,
             depth_str,
             volatility_str,
+            # Model Insights
+            progress_bar_style,
+            training_stats_str,
+            accuracy_str,
+            accuracy_style,
+            weights_chart,
         )
 
     return app

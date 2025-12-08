@@ -6,11 +6,13 @@ import os
 import signal
 import sys
 import threading
+import time
 from typing import Optional
 
 from src.dashboard.app import create_app, update_shared_state
-from src.features import FeatureExtractor, StabilityScorer
+from src.features import FeatureExtractor, Labeler, StabilityScorer
 from src.ingest import CoinbaseWebSocketClient, OrderBook
+from src.model import OnlineClassifier
 
 # Configure logging
 logging.basicConfig(
@@ -21,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 class QuoteWatchRunner:
-    """Orchestrates WebSocket client, order book, features, and dashboard."""
+    """Orchestrates WebSocket client, order book, features, ML model, and dashboard."""
 
     def __init__(self, symbol: str = "BTC-USD"):
         """Initialize the runner.
@@ -32,7 +34,12 @@ class QuoteWatchRunner:
         self.symbol = symbol
         self.order_book = OrderBook(depth=3)
         self.feature_extractor = FeatureExtractor(volatility_window=50)
-        self.stability_scorer = StabilityScorer()
+        self.stability_scorer = StabilityScorer()  # Keep as fallback
+
+        # ML pipeline components
+        self.labeler = Labeler(delta_ms=500, threshold_pct=0.01)
+        self.classifier = OnlineClassifier(learning_rate=0.01)
+
         self.ws_client = CoinbaseWebSocketClient(
             order_book=self.order_book,
             symbol=symbol,
@@ -48,10 +55,32 @@ class QuoteWatchRunner:
         # Extract features
         features = self.feature_extractor.compute(snapshot)
 
-        # Compute stability score
+        # Compute stability score (heuristic fallback)
         stability = None
         if features is not None:
             stability = self.stability_scorer.score(features)
+
+        # ML pipeline: labeling and training
+        prediction_proba = None
+        model_stats = None
+
+        if features is not None and snapshot.mid_price is not None:
+            # Get current timestamp in milliseconds
+            timestamp_ms = time.time() * 1000
+            mid_price = float(snapshot.mid_price)
+
+            # Add sample to labeler - may return a labeled sample
+            labeled_sample = self.labeler.add_sample(timestamp_ms, mid_price, features)
+
+            # If we got a labeled sample, train the model
+            if labeled_sample is not None:
+                self.classifier.partial_fit(labeled_sample.features, labeled_sample.label)
+
+            # Get prediction for current features
+            prediction_proba = self.classifier.predict_proba(features)
+
+            # Get model statistics
+            model_stats = self.classifier.get_stats()
 
         # Update dashboard state
         update_shared_state(
@@ -65,10 +94,19 @@ class QuoteWatchRunner:
             imbalance=features.imbalance if features else None,
             depth=features.depth if features else None,
             volatility=features.volatility if features else None,
-            # Stability data
+            # Stability data (heuristic)
             stability_score=stability.score if stability else None,
             stability_category=stability.category if stability else None,
             stability_color=stability.color if stability else None,
+            # ML prediction data
+            prediction_proba=prediction_proba,
+            model_ready=model_stats.is_ready if model_stats else False,
+            model_samples_total=model_stats.samples_total if model_stats else 0,
+            model_samples_no_change=model_stats.samples_no_change if model_stats else 0,
+            model_samples_change=model_stats.samples_change if model_stats else 0,
+            model_ready_pct=model_stats.ready_pct if model_stats else 0.0,
+            model_accuracy=model_stats.accuracy_recent if model_stats else None,
+            model_weights=model_stats.weights if model_stats else None,
         )
 
     def _run_async_loop(self) -> None:
