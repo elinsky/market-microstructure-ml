@@ -16,28 +16,20 @@ QuoteWatch predicts short-term price changes (Δ=500ms) using L2 order book data
 
 High-level view of system boundaries and external interactions.
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         QuoteWatch System                            │
-│                                                                      │
-│  ┌──────────┐    ┌───────────┐    ┌─────────┐    ┌──────────────┐  │
-│  │ WS Client │───►│Order Book │───►│Features │───►│   Labeler    │  │
-│  └──────────┘    └───────────┘    │Extractor│    │  (Δ=500ms)   │  │
-│       ▲                           └─────────┘    └──────┬───────┘  │
-│       │                                │                 │          │
-│       │                                ▼                 ▼          │
-│       │                          ┌──────────┐    ┌──────────────┐  │
-│       │                          │ Classifier│◄───│partial_fit() │  │
-│       │                          │(SGD+Scaler)│   └──────────────┘  │
-│       │                          └─────┬────┘                       │
-│       │                                │                            │
-│       │                                ▼                            │
-│  ┌────┴─────┐                    ┌──────────┐    ┌──────────────┐  │
-│  │ Coinbase │                    │  Shared  │◄───│   Dashboard  │◄──┤ User
-│  │ WS API   │                    │  State   │    │  (Dash app)  │  │
-│  └──────────┘                    └──────────┘    └──────────────┘  │
-│                                                                      │
-└─────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph QuoteWatch["QuoteWatch System"]
+        WS[WS Client] --> OB[Order Book]
+        OB --> FE[Feature Extractor]
+        FE --> L[Labeler<br/>Δ=500ms]
+        FE --> C[Classifier<br/>SGD+Scaler]
+        L -->|partial_fit| C
+        C --> SS[Shared State]
+        SS --> D[Dashboard<br/>Dash app]
+    end
+
+    CB[Coinbase WS API] --> WS
+    D --> U[User]
 ```
 
 ## 2. Component Diagram
@@ -74,42 +66,17 @@ src/
 
 Live tick to prediction and dashboard flow.
 
-```
-1. Coinbase WS sends L2 update
-        │
-        ▼
-2. Order Book applies changes, updates top-3 bids/asks
-        │
-        ▼
-3. Feature Extractor computes:
-   - spread_bps: (ask - bid) / mid * 10000
-   - imbalance: (bid_vol - ask_vol) / total_vol
-   - depth: sum of bid + ask volumes
-   - volatility: rolling std of mid-price changes
-        │
-        ▼
-4. Classifier predicts P(price_change) for current features
-        │
-        ▼
-5. Labeler buffers (timestamp, mid_price, features, prediction)
-        │
-        ▼
-6. After Δ=500ms, Labeler emits LabeledSample with:
-   - features from time T
-   - label: 1 if |mid(T+Δ) - mid(T)| > τ, else 0
-   - prediction_at_t: prediction made at time T
-        │
-        ▼
-7. Classifier.partial_fit() updates model with new sample
-        │
-        ▼
-8. Classifier.record_prediction() tracks accuracy
-        │
-        ▼
-9. Shared state updated with prices, features, prediction, model stats
-        │
-        ▼
-10. Dashboard polls every 300ms, renders latest state
+```mermaid
+flowchart TD
+    A[1. Coinbase WS sends L2 update] --> B[2. Order Book updates top-3 bids/asks]
+    B --> C[3. Feature Extractor computes:<br/>spread_bps, imbalance, depth, volatility]
+    C --> D[4. Classifier predicts P price_change]
+    D --> E[5. Labeler buffers timestamp, price, features, prediction]
+    E --> F[6. After Δ=500ms, Labeler emits LabeledSample]
+    F --> G[7. Classifier.partial_fit updates model]
+    G --> H[8. Classifier.record_prediction tracks accuracy]
+    H --> I[9. Shared state updated]
+    I --> J[10. Dashboard polls every 300ms]
 ```
 
 ## 4. ML Pipeline Details
@@ -145,33 +112,18 @@ Predictions are temporally aligned with labels:
 
 ### Cloud Run (Current)
 
-```
-┌─────────────────────────────────────────┐
-│           Google Cloud Run               │
-│                                          │
-│  ┌────────────────────────────────────┐ │
-│  │     Container: quotewatch           │ │
-│  │                                     │ │
-│  │  ┌─────────────┐  ┌──────────────┐ │ │
-│  │  │ Gunicorn    │  │ WS Client    │ │ │
-│  │  │ (Dash app)  │  │ (background) │ │ │
-│  │  └─────────────┘  └──────────────┘ │ │
-│  │         │                 │         │ │
-│  │         └────────┬────────┘         │ │
-│  │                  │                  │ │
-│  │         ┌────────▼────────┐         │ │
-│  │         │  Shared Memory  │         │ │
-│  │         │  (in-process)   │         │ │
-│  │         └─────────────────┘         │ │
-│  └────────────────────────────────────┘ │
-└─────────────────────────────────────────┘
-         │
-         │ HTTPS
-         ▼
-    ┌─────────┐
-    │  User   │
-    │ Browser │
-    └─────────┘
+```mermaid
+flowchart TD
+    subgraph GCR["Google Cloud Run"]
+        subgraph Container["Container: quotewatch"]
+            G[Gunicorn<br/>Dash app]
+            WS[WS Client<br/>background]
+            G --> SM[Shared Memory<br/>in-process]
+            WS --> SM
+        end
+    end
+
+    GCR -->|HTTPS| U[User Browser]
 ```
 
 ### Environment Variables
@@ -191,25 +143,15 @@ gcloud run deploy quotewatch \
 
 WebSocket client connection resilience.
 
-```
-[Init] ──start()──► [Connecting]
-                         │
-           ┌─────────────┼─────────────┐
-           │             │             │
-      onError/       onOpen +      timeout
-      timeout        subscribe
-           │             │             │
-           ▼             ▼             │
-      [Backoff] ◄── [Subscribed] ──────┘
-           │             │
-    delay elapsed   onMessage (l2update)
-           │             │
-           └──────► [Subscribed]
-                         │
-                      stop()
-                         │
-                         ▼
-                      [Done]
+```mermaid
+stateDiagram-v2
+    [*] --> Connecting: start()
+    Connecting --> Subscribed: onOpen + subscribe
+    Connecting --> Backoff: onError / timeout
+    Subscribed --> Subscribed: onMessage (l2update)
+    Subscribed --> Backoff: onError / timeout
+    Backoff --> Connecting: delay elapsed
+    Subscribed --> [*]: stop()
 ```
 
 ## Future Improvements
