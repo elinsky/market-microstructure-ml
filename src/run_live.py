@@ -69,15 +69,24 @@ class QuoteWatchRunner:
             timestamp_ms = time.time() * 1000
             mid_price = float(snapshot.mid_price)
 
-            # Add sample to labeler - may return a labeled sample
-            labeled_sample = self.labeler.add_sample(timestamp_ms, mid_price, features)
+            # Get prediction for current features (before adding sample)
+            prediction_proba = self.classifier.predict_proba(features)
+            current_prediction = self.classifier.predict(features)
 
-            # If we got a labeled sample, train the model
+            # Add sample to labeler with current prediction for accuracy tracking
+            labeled_sample = self.labeler.add_sample(
+                timestamp_ms, mid_price, features, prediction=current_prediction
+            )
+
+            # If we got a labeled sample, train the model and record accuracy
             if labeled_sample is not None:
                 self.classifier.partial_fit(labeled_sample.features, labeled_sample.label)
 
-            # Get prediction for current features
-            prediction_proba = self.classifier.predict_proba(features)
+                # Record prediction accuracy if we had a prediction at time t
+                if labeled_sample.prediction_at_t is not None:
+                    self.classifier.record_prediction(
+                        labeled_sample.prediction_at_t, labeled_sample.label
+                    )
 
             # Get model statistics
             model_stats = self.classifier.get_stats()
