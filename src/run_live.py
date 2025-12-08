@@ -9,6 +9,7 @@ import threading
 from typing import Optional
 
 from src.dashboard.app import create_app, update_shared_state
+from src.features import FeatureExtractor, StabilityScorer
 from src.ingest import CoinbaseWebSocketClient, OrderBook
 
 # Configure logging
@@ -20,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 class QuoteWatchRunner:
-    """Orchestrates WebSocket client, order book, and dashboard."""
+    """Orchestrates WebSocket client, order book, features, and dashboard."""
 
     def __init__(self, symbol: str = "BTC-USD"):
         """Initialize the runner.
@@ -30,6 +31,8 @@ class QuoteWatchRunner:
         """
         self.symbol = symbol
         self.order_book = OrderBook(depth=3)
+        self.feature_extractor = FeatureExtractor(volatility_window=50)
+        self.stability_scorer = StabilityScorer()
         self.ws_client = CoinbaseWebSocketClient(
             order_book=self.order_book,
             symbol=symbol,
@@ -42,12 +45,30 @@ class QuoteWatchRunner:
         """Callback when order book is updated."""
         snapshot = self.order_book.get_snapshot()
 
+        # Extract features
+        features = self.feature_extractor.compute(snapshot)
+
+        # Compute stability score
+        stability = None
+        if features is not None:
+            stability = self.stability_scorer.score(features)
+
+        # Update dashboard state
         update_shared_state(
             best_bid=float(snapshot.best_bid) if snapshot.best_bid else None,
             best_ask=float(snapshot.best_ask) if snapshot.best_ask else None,
             mid_price=float(snapshot.mid_price) if snapshot.mid_price else None,
             spread=float(snapshot.spread) if snapshot.spread else None,
             timestamp=snapshot.timestamp,
+            # Feature data
+            spread_bps=features.spread_bps if features else None,
+            imbalance=features.imbalance if features else None,
+            depth=features.depth if features else None,
+            volatility=features.volatility if features else None,
+            # Stability data
+            stability_score=stability.score if stability else None,
+            stability_category=stability.category if stability else None,
+            stability_color=stability.color if stability else None,
         )
 
     def _run_async_loop(self) -> None:
