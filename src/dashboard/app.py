@@ -1,6 +1,7 @@
 """Plotly Dash application for live price display."""
 
 from collections import deque
+from dataclasses import dataclass
 from typing import Any, Deque, Dict, Optional
 
 from dash import Dash, Input, Output, dcc, html
@@ -23,8 +24,24 @@ _shared_state: Dict[str, Any] = {
     "stability_color": None,
 }
 
-# Price history for sparkline
-_price_history: Deque[float] = deque(maxlen=100)
+
+@dataclass
+class OHLCCandle:
+    """Single OHLC candle aggregating multiple ticks."""
+
+    open: float
+    high: float
+    low: float
+    close: float
+    tick_count: int = 1
+
+
+# OHLC candle history (each candle = 10 ticks)
+TICKS_PER_CANDLE = 10
+MAX_CANDLES = 50
+_candle_history: Deque[OHLCCandle] = deque(maxlen=MAX_CANDLES)
+_current_candle: Optional[OHLCCandle] = None
+_tick_count: int = 0
 
 
 def update_shared_state(
@@ -70,8 +87,32 @@ def update_shared_state(
     _shared_state["stability_category"] = stability_category
     _shared_state["stability_color"] = stability_color
 
+    # Build OHLC candles from mid prices
     if mid_price is not None:
-        _price_history.append(mid_price)
+        _update_candles(mid_price)
+
+
+def _update_candles(price: float) -> None:
+    """Update OHLC candle history with new price tick."""
+    global _current_candle, _tick_count
+
+    if _current_candle is None:
+        # Start new candle
+        _current_candle = OHLCCandle(open=price, high=price, low=price, close=price)
+        _tick_count = 1
+    else:
+        # Update current candle
+        _current_candle.high = max(_current_candle.high, price)
+        _current_candle.low = min(_current_candle.low, price)
+        _current_candle.close = price
+        _current_candle.tick_count += 1
+        _tick_count += 1
+
+    # Close candle after TICKS_PER_CANDLE ticks
+    if _tick_count >= TICKS_PER_CANDLE:
+        _candle_history.append(_current_candle)
+        _current_candle = None
+        _tick_count = 0
 
 
 def create_app() -> Dash:
@@ -280,14 +321,14 @@ def create_app() -> Dash:
                     "maxWidth": "300px",
                 },
             ),
-            # Price history sparkline
+            # Price history candlestick chart
             html.Div(
                 [
-                    html.H4("Price History (last 100 ticks)"),
+                    html.H4("Price History (OHLC - 10 ticks per candle)"),
                     dcc.Graph(
-                        id="price-sparkline",
+                        id="price-chart",
                         config={"displayModeBar": False},
-                        style={"height": "150px"},
+                        style={"height": "250px"},
                     ),
                 ],
                 style={
@@ -321,7 +362,7 @@ def create_app() -> Dash:
             Output("ask-price", "children"),
             Output("spread-value", "children"),
             Output("timestamp", "children"),
-            Output("price-sparkline", "figure"),
+            Output("price-chart", "figure"),
             Output("stability-score", "children"),
             Output("stability-category", "children"),
             Output("stability-indicator", "style"),
@@ -347,29 +388,58 @@ def create_app() -> Dash:
         spread_str = f"${spread:.2f}" if spread else "--"
         ts_str = f"Last update: {ts}" if ts else "Waiting for data..."
 
-        # Sparkline figure
-        prices = list(_price_history)
-        sparkline = {
+        # Build OHLC candlestick chart
+        candles = list(_candle_history)
+        # Include current in-progress candle if exists
+        if _current_candle is not None:
+            candles = candles + [_current_candle]
+
+        if candles:
+            opens = [c.open for c in candles]
+            highs = [c.high for c in candles]
+            lows = [c.low for c in candles]
+            closes = [c.close for c in candles]
+            x_vals = list(range(len(candles)))
+
+            # Calculate y-axis range with padding
+            all_prices = highs + lows
+            y_min = min(all_prices)
+            y_max = max(all_prices)
+            y_padding = (y_max - y_min) * 0.1 if y_max > y_min else 10
+            y_range = [y_min - y_padding, y_max + y_padding]
+        else:
+            opens = highs = lows = closes = x_vals = []
+            y_range = None
+
+        price_chart = {
             "data": [
                 {
-                    "y": prices,
-                    "type": "scatter",
-                    "mode": "lines",
-                    "line": {"color": "#ffc107", "width": 2},
-                    "fill": "tozeroy",
-                    "fillcolor": "rgba(255, 193, 7, 0.1)",
+                    "type": "candlestick",
+                    "x": x_vals,
+                    "open": opens,
+                    "high": highs,
+                    "low": lows,
+                    "close": closes,
+                    "increasing": {"line": {"color": "#28a745"}},
+                    "decreasing": {"line": {"color": "#dc3545"}},
                 }
             ],
             "layout": {
-                "margin": {"l": 40, "r": 20, "t": 10, "b": 30},
+                "margin": {"l": 60, "r": 20, "t": 10, "b": 30},
                 "paper_bgcolor": "rgba(0,0,0,0)",
                 "plot_bgcolor": "rgba(0,0,0,0)",
-                "xaxis": {"showgrid": False, "showticklabels": False},
+                "xaxis": {
+                    "showgrid": False,
+                    "showticklabels": False,
+                    "rangeslider": {"visible": False},
+                },
                 "yaxis": {
                     "showgrid": True,
                     "gridcolor": "rgba(255,255,255,0.1)",
                     "tickformat": "$,.0f",
                     "tickfont": {"color": "#666"},
+                    "range": y_range,
+                    "autorange": False if y_range else True,
                 },
             },
         }
@@ -435,7 +505,7 @@ def create_app() -> Dash:
             ask_str,
             spread_str,
             ts_str,
-            sparkline,
+            price_chart,
             score_str,
             category_str,
             indicator_style,
