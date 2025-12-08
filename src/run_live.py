@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 import signal
 import sys
 import threading
@@ -21,24 +22,21 @@ logger = logging.getLogger(__name__)
 class QuoteWatchRunner:
     """Orchestrates WebSocket client, order book, and dashboard."""
 
-    def __init__(self, symbol: str = "BTC-USD", dash_port: int = 8050):
+    def __init__(self, symbol: str = "BTC-USD"):
         """Initialize the runner.
 
         Args:
             symbol: Trading pair to track.
-            dash_port: Port for the Dash server.
         """
         self.symbol = symbol
-        self.dash_port = dash_port
-
         self.order_book = OrderBook(depth=3)
         self.ws_client = CoinbaseWebSocketClient(
             order_book=self.order_book,
             symbol=symbol,
             on_update=self._on_order_book_update,
         )
-        self.dash_app = create_app()
-        self._dash_thread: Optional[threading.Thread] = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._thread: Optional[threading.Thread] = None
 
     def _on_order_book_update(self) -> None:
         """Callback when order book is updated."""
@@ -52,56 +50,83 @@ class QuoteWatchRunner:
             timestamp=snapshot.timestamp,
         )
 
-    def _run_dash_server(self) -> None:
-        """Run Dash server in a separate thread."""
-        # Suppress Werkzeug logs
-        log = logging.getLogger("werkzeug")
-        log.setLevel(logging.WARNING)
+    def _run_async_loop(self) -> None:
+        """Run the async event loop in a background thread."""
+        self._loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._loop)
 
-        self.dash_app.run(
-            host="0.0.0.0",
-            port=self.dash_port,
-            debug=False,
-            use_reloader=False,
-        )
+        try:
+            self._loop.run_until_complete(self.ws_client.start())
+        except Exception as e:
+            logger.error(f"WebSocket error: {e}")
+        finally:
+            self._loop.close()
 
-    async def run(self) -> None:
-        """Run the complete system."""
-        # Start Dash in background thread
-        self._dash_thread = threading.Thread(target=self._run_dash_server, daemon=True)
-        self._dash_thread.start()
-        logger.info(f"Dashboard running at http://localhost:{self.dash_port}")
+    def start_background(self) -> None:
+        """Start WebSocket client in background thread."""
+        logger.info(f"Starting WebSocket client for {self.symbol} in background...")
+        self._thread = threading.Thread(target=self._run_async_loop, daemon=True)
+        self._thread.start()
 
-        # Run WebSocket client (main async loop)
-        logger.info(f"Starting WebSocket client for {self.symbol}...")
-        await self.ws_client.start()
+    def stop(self) -> None:
+        """Stop the WebSocket client."""
+        logger.info("Shutting down WebSocket client...")
+        if self._loop and self._loop.is_running():
+            asyncio.run_coroutine_threadsafe(self.ws_client.stop(), self._loop)
 
-    async def stop(self) -> None:
-        """Stop all components."""
-        logger.info("Shutting down...")
-        await self.ws_client.stop()
+
+# Create Dash app
+dash_app = create_app()
+
+# Expose Flask server for Gunicorn
+server = dash_app.server
+
+# Global runner instance
+_runner: Optional[QuoteWatchRunner] = None
+
+
+def start_websocket_client() -> None:
+    """Start the WebSocket client (called once on app startup)."""
+    global _runner
+    if _runner is None:
+        _runner = QuoteWatchRunner(symbol="BTC-USD")
+        _runner.start_background()
+
+
+# Start WebSocket client when module is imported (for Gunicorn)
+start_websocket_client()
+
+
+def handle_shutdown(signum, frame):
+    """Handle shutdown signals."""
+    logger.info(f"Received signal {signum}, shutting down...")
+    if _runner:
+        _runner.stop()
+    sys.exit(0)
+
+
+# Register signal handlers
+signal.signal(signal.SIGTERM, handle_shutdown)
+signal.signal(signal.SIGINT, handle_shutdown)
 
 
 async def main() -> None:
-    """Main async entry point."""
-    runner = QuoteWatchRunner(symbol="BTC-USD")
+    """Main async entry point for local development."""
+    port = int(os.environ.get("PORT", 8050))
 
-    # Handle graceful shutdown
-    loop = asyncio.get_event_loop()
+    # Suppress Werkzeug logs
+    log = logging.getLogger("werkzeug")
+    log.setLevel(logging.WARNING)
 
-    def signal_handler():
-        logger.info("Received shutdown signal")
-        asyncio.create_task(runner.stop())
+    logger.info(f"Dashboard running at http://localhost:{port}")
 
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, signal_handler)
-
-    try:
-        await runner.run()
-    except asyncio.CancelledError:
-        pass
-    finally:
-        await runner.stop()
+    # Run Dash dev server (WebSocket already started via module import)
+    dash_app.run(
+        host="0.0.0.0",
+        port=port,
+        debug=False,
+        use_reloader=False,
+    )
 
 
 if __name__ == "__main__":

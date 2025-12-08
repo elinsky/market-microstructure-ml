@@ -52,6 +52,11 @@ def create_app() -> Dash:
     """
     app = Dash(__name__)
 
+    # Add health check endpoint to underlying Flask server
+    @app.server.route("/health")
+    def health():
+        return "OK", 200
+
     app.layout = html.Div(
         [
             html.H1("QuoteWatch - BTC-USD Live", style={"textAlign": "center"}),

@@ -14,6 +14,7 @@ dependencies = [
     "xgboost>=2.0",
     "plotly>=5.18",
     "dash>=2.14",
+    "gunicorn>=21.0",
 ]
 
 [project.optional-dependencies]
