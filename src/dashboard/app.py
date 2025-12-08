@@ -164,6 +164,65 @@ def create_app() -> Dash:
     def health():
         return "OK", 200
 
+    # Mobile-responsive CSS
+    app.index_string = '''
+<!DOCTYPE html>
+<html>
+    <head>
+        {%metas%}
+        <title>{%title%}</title>
+        {%favicon%}
+        {%css%}
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            /* Mobile-responsive styles */
+            @media (max-width: 768px) {
+                .price-cards {
+                    flex-direction: column !important;
+                }
+                .price-cards > div {
+                    margin: 5px 10px !important;
+                }
+                .metrics-row {
+                    flex-wrap: wrap !important;
+                }
+                .metrics-row > div {
+                    flex: 1 1 45% !important;
+                    margin-bottom: 10px !important;
+                }
+                .model-insights-row {
+                    flex-direction: column !important;
+                }
+                .model-insights-row > div {
+                    border-left: none !important;
+                    border-right: none !important;
+                    border-bottom: 1px solid #333 !important;
+                    padding: 10px 0 !important;
+                    margin-bottom: 10px !important;
+                }
+                .model-insights-row > div:last-child {
+                    border-bottom: none !important;
+                }
+                h1 {
+                    font-size: 1.5rem !important;
+                }
+                h2 {
+                    font-size: 1.2rem !important;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        {%app_entry%}
+        <footer>
+            {%config%}
+            {%scripts%}
+            {%renderer%}
+        </footer>
+    </body>
+</html>
+'''
+
     app.layout = html.Div(
         [
             html.H1("QuoteWatch - BTC-USD Live", style={"textAlign": "center"}),
@@ -285,6 +344,7 @@ def create_app() -> Dash:
                                 style={"flex": "1", "textAlign": "center"},
                             ),
                         ],
+                        className="metrics-row",
                         style={"display": "flex", "justifyContent": "space-around"},
                     ),
                 ],
@@ -292,7 +352,7 @@ def create_app() -> Dash:
                     "padding": "15px",
                     "backgroundColor": "#16213e",
                     "borderRadius": "10px",
-                    "margin": "0 20px 20px 20px",
+                    "margin": "0 10px 20px 10px",
                 },
             ),
             # Price cards
@@ -300,79 +360,83 @@ def create_app() -> Dash:
                 [
                     html.Div(
                         [
-                            html.H3("Best Bid", style={"color": "#28a745"}),
-                            html.H2(id="bid-price", children="--"),
+                            html.H3("Best Bid", style={"color": "#28a745", "fontSize": "1rem", "margin": "0 0 5px 0"}),
+                            html.H2(id="bid-price", children="--", style={"margin": "0", "fontSize": "1.3rem"}),
                         ],
                         style={
                             "flex": "1",
                             "textAlign": "center",
-                            "padding": "20px",
+                            "padding": "15px",
                             "backgroundColor": "#1a1a2e",
                             "borderRadius": "10px",
-                            "margin": "10px",
+                            "margin": "5px",
+                            "minWidth": "100px",
                         },
                     ),
                     html.Div(
                         [
-                            html.H3("Mid Price", style={"color": "#ffc107"}),
-                            html.H2(id="mid-price", children="--"),
+                            html.H3("Mid Price", style={"color": "#ffc107", "fontSize": "1rem", "margin": "0 0 5px 0"}),
+                            html.H2(id="mid-price", children="--", style={"margin": "0", "fontSize": "1.3rem"}),
                         ],
                         style={
                             "flex": "1",
                             "textAlign": "center",
-                            "padding": "20px",
+                            "padding": "15px",
                             "backgroundColor": "#1a1a2e",
                             "borderRadius": "10px",
-                            "margin": "10px",
+                            "margin": "5px",
+                            "minWidth": "100px",
                         },
                     ),
                     html.Div(
                         [
-                            html.H3("Best Ask", style={"color": "#dc3545"}),
-                            html.H2(id="ask-price", children="--"),
+                            html.H3("Best Ask", style={"color": "#dc3545", "fontSize": "1rem", "margin": "0 0 5px 0"}),
+                            html.H2(id="ask-price", children="--", style={"margin": "0", "fontSize": "1.3rem"}),
                         ],
                         style={
                             "flex": "1",
                             "textAlign": "center",
-                            "padding": "20px",
+                            "padding": "15px",
                             "backgroundColor": "#1a1a2e",
                             "borderRadius": "10px",
-                            "margin": "10px",
+                            "margin": "5px",
+                            "minWidth": "100px",
                         },
                     ),
                 ],
-                style={"display": "flex", "justifyContent": "center"},
+                className="price-cards",
+                style={"display": "flex", "justifyContent": "center", "flexWrap": "wrap", "margin": "0 5px"},
             ),
             # Spread display
             html.Div(
                 [
-                    html.H4("Spread"),
-                    html.H3(id="spread-value", children="--"),
+                    html.H4("Spread", style={"margin": "0 0 5px 0"}),
+                    html.H3(id="spread-value", children="--", style={"margin": "0"}),
                 ],
                 style={
                     "textAlign": "center",
-                    "padding": "15px",
+                    "padding": "10px 15px",
                     "backgroundColor": "#16213e",
                     "borderRadius": "10px",
-                    "margin": "20px auto",
-                    "maxWidth": "300px",
+                    "margin": "10px auto",
+                    "maxWidth": "200px",
                 },
             ),
             # Price history candlestick chart
             html.Div(
                 [
-                    html.H4("Price History (OHLC - 10 ticks per candle)"),
+                    html.H4("Price History (OHLC)", style={"margin": "0 0 10px 0", "fontSize": "0.9rem"}),
                     dcc.Graph(
                         id="price-chart",
                         config={"displayModeBar": False},
-                        style={"height": "250px"},
+                        style={"height": "200px"},
                     ),
                 ],
                 style={
-                    "padding": "20px",
+                    "padding": "15px",
                     "backgroundColor": "#1a1a2e",
                     "borderRadius": "10px",
-                    "margin": "20px",
+                    "margin": "10px",
                 },
             ),
             # Model Insights Panel
@@ -467,12 +531,14 @@ def create_app() -> Dash:
                                         style={"height": "80px"},
                                     ),
                                 ],
-                                style={"flex": "2", "padding": "0 15px"},
+                                style={"flex": "2", "padding": "0 15px", "minWidth": "200px"},
                             ),
                         ],
+                        className="model-insights-row",
                         style={
                             "display": "flex",
                             "alignItems": "flex-start",
+                            "flexWrap": "wrap",
                         },
                     ),
                 ],
@@ -480,7 +546,7 @@ def create_app() -> Dash:
                     "padding": "15px",
                     "backgroundColor": "#16213e",
                     "borderRadius": "10px",
-                    "margin": "20px",
+                    "margin": "10px",
                 },
             ),
             # Timestamp
@@ -496,7 +562,7 @@ def create_app() -> Dash:
             "backgroundColor": "#0f0f23",
             "color": "white",
             "minHeight": "100vh",
-            "padding": "20px",
+            "padding": "10px",
         },
     )
 
