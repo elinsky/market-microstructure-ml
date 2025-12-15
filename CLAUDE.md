@@ -30,6 +30,54 @@ pre-commit install
 pre-commit run --all-files
 ```
 
+## Git Workflow
+
+**Always work in branches and use PRs** - never push directly to main.
+
+```bash
+# 1. Create a feature branch
+git checkout -b feature-x
+
+# 2. Make changes and commit (pre-commit hooks run automatically)
+git add .
+git commit -m "feat: add feature x"
+
+# 3. Push branch and open PR
+git push -u origin feature-x
+gh pr create --fill
+
+# 4. CI runs on the PR - if it fails, fix and push again
+
+# 5. Before merging, rebase onto main for fast-forward merge
+git fetch origin
+git rebase origin/main
+git push --force-with-lease
+
+# 6. Merge with fast-forward (use "Rebase and merge" in GitHub UI)
+```
+
+Branch protection blocks merging until `lint` and `test` jobs pass.
+
+**Use fast-forward merges** (rebase and merge) for a clean linear history - no merge commits.
+
+## Project Structure
+
+```
+src/
+├── ingest/          # WebSocket client, order book
+├── features/        # Feature extraction, labeling
+├── model/           # ML classifiers
+├── dashboard/       # Dash app
+└── run_live.py      # Main entry point
+
+tests/               # Unit tests
+docs/                # Documentation
+  ├── prd.md         # Product requirements
+  ├── architecture.md
+  ├── mldesign.md
+  └── design/        # Design docs for epics
+```
+
 ## Conventions
 
 - **TDD**: Write tests first for each component
