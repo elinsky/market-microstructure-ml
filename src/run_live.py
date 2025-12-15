@@ -45,7 +45,7 @@ class QuoteWatchRunner:
             symbol: Trading pair to track.
         """
         self.symbol = symbol
-        self.order_book = OrderBook(depth=3)
+        self.order_book = OrderBook(depth=10)
         self.feature_extractor = FeatureExtractor(volatility_window=50)
         self.stability_scorer = StabilityScorer()  # Keep as fallback
 

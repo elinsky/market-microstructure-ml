@@ -40,7 +40,7 @@ Internal modules and their responsibilities.
 src/
 ├── ingest/
 │   ├── websocket_client.py   # Coinbase WS connection, reconnection logic
-│   └── order_book.py         # Thread-safe order book cache (top-3 levels)
+│   └── order_book.py         # Thread-safe order book cache (top-10 levels)
 │
 ├── features/
 │   ├── extractor.py          # Computes spread_bps, imbalance, depth, volatility
@@ -68,7 +68,7 @@ Live tick to prediction and dashboard flow.
 
 ```mermaid
 flowchart TD
-    A[1. Coinbase WS sends L2 update] --> B[2. Order Book updates top-3 bids/asks]
+    A[1. Coinbase WS sends L2 update] --> B[2. Order Book updates top-10 bids/asks]
     B --> C[3. Feature Extractor computes:<br/>spread_bps, imbalance, depth, volatility]
     C --> D[4. Classifier predicts P price_change]
     D --> E[5. Labeler buffers timestamp, price, features, prediction]

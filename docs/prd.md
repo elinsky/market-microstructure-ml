@@ -42,7 +42,7 @@ Basically: **streaming data -> features -> predictions -> trading decisions -> d
 
 ## Current Status
 
-- Coinbase WebSocket for L2 order book (only keeping top 3 levels)
+- Coinbase WebSocket for L2 order book (keeping top 10 levels)
 - 4 basic features: spread_bps, imbalance, depth, volatility
 - SGDClassifier that trains online
 - Dash dashboard that polls every 300ms

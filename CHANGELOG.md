@@ -31,6 +31,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+- Order book depth increased from 3 to 10 levels for richer market microstructure data
+
 ### Planned
 - Unit tests for core components
 - ETH-USD support

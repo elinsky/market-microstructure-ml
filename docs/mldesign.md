@@ -25,7 +25,7 @@ Where:
 |---------|---------|-------------|
 | `spread_bps` | $\frac{p_{\text{ask}} - p_{\text{bid}}}{p_{\text{mid}}} \times 10000$ | Spread in basis points |
 | `imbalance` | $\frac{V_{\text{bid}} - V_{\text{ask}}}{V_{\text{bid}} + V_{\text{ask}}}$ | Order book imbalance at top level $\in [-1, 1]$ |
-| `depth` | $\sum_{i=1}^{3} V_{\text{bid},i} + \sum_{i=1}^{3} V_{\text{ask},i}$ | Total volume at top-3 levels |
+| `depth` | $\sum_{i=1}^{10} V_{\text{bid},i} + \sum_{i=1}^{10} V_{\text{ask},i}$ | Total volume at top-10 levels |
 | `volatility` | $\sigma\left(\frac{\Delta p_{\text{mid}}}{p_{\text{mid}}}\right)$ | Rolling std of mid-price changes (bps) |
 
 ### Future Features (Not Yet Implemented)

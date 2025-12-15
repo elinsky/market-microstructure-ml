@@ -22,7 +22,7 @@ flowchart TB
 
     subgraph Ingestion["Ingestion Layer"]
         WSClient[WebSocketClient]
-        OB[OrderBook<br/>depth=3]
+        OB[OrderBook<br/>depth=10]
     end
 
     subgraph Features["Feature Layer"]
@@ -53,7 +53,7 @@ flowchart TB
 
 **Limitations:**
 - Only L2 data, no trades
-- Only top 3 levels kept
+- Only top 10 levels kept
 - All data in-memory, lost on restart
 - No historical replay capability
 
