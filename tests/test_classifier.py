@@ -7,14 +7,18 @@ from src.model.classifier import OnlineClassifier
 class TestOnlineClassifier:
     """Tests for OnlineClassifier class."""
 
-    def _make_features(
+    # =========================================================================
+    # Test Data Helpers
+    # =========================================================================
+
+    def make_features(
         self,
         spread_bps: float = 10.0,
         imbalance: float = 0.0,
         depth: float = 5.0,
         volatility: float = 1.0,
     ) -> FeatureSnapshot:
-        """Helper to create a FeatureSnapshot."""
+        """Create a FeatureSnapshot with configurable values."""
         return FeatureSnapshot(
             spread_bps=spread_bps,
             imbalance=imbalance,
@@ -22,133 +26,194 @@ class TestOnlineClassifier:
             volatility=volatility,
         )
 
-    def test_initial_state(self):
-        """Classifier starts not ready with zero samples."""
-        classifier = OnlineClassifier()
+    def make_classifier(self) -> OnlineClassifier:
+        """Create a new OnlineClassifier."""
+        return OnlineClassifier()
 
-        assert classifier.sample_count == 0
-        assert classifier.is_ready is False
+    def make_trained_classifier(self, samples_per_class: int = 50) -> OnlineClassifier:
+        """Create a classifier trained with samples of each class."""
+        classifier = self.make_classifier()
+        for i in range(samples_per_class):
+            classifier.partial_fit(self.make_features(spread_bps=i), 0)
+            classifier.partial_fit(self.make_features(spread_bps=i + 100), 1)
+        return classifier
 
-    def test_predict_proba_before_fit(self):
-        """Returns 0.5 before model is fitted."""
-        classifier = OnlineClassifier()
-        features = self._make_features()
+    # =========================================================================
+    # Tests - Initial State
+    # =========================================================================
 
+    def test_initial_sample_count_is_zero(self):
+        """New classifier has zero samples."""
+        # GIVEN a new classifier
+        classifier = self.make_classifier()
+
+        # WHEN we check sample count (no action)
+        count = classifier.sample_count
+
+        # THEN count is 0
+        assert count == 0
+
+    def test_initial_state_not_ready(self):
+        """New classifier is not ready for predictions."""
+        # GIVEN a new classifier
+        classifier = self.make_classifier()
+
+        # WHEN we check readiness (no action)
+        ready = classifier.is_ready
+
+        # THEN it's not ready
+        assert ready is False
+
+    # =========================================================================
+    # Tests - Predictions Before Training
+    # =========================================================================
+
+    def test_predict_proba_returns_half_before_training(self):
+        """Returns 0.5 (maximum uncertainty) before any training."""
+        # GIVEN a new classifier and features
+        classifier = self.make_classifier()
+        features = self.make_features()
+
+        # WHEN we predict probability
         proba = classifier.predict_proba(features)
 
+        # THEN probability is 0.5
         assert proba == 0.5
 
-    def test_predict_before_fit(self):
-        """Returns 1 before model is fitted (proba=0.5 rounds to 1)."""
-        classifier = OnlineClassifier()
-        features = self._make_features()
+    def test_predict_returns_one_before_training(self):
+        """Returns 1 before training (proba=0.5 rounds to 1)."""
+        # GIVEN a new classifier and features
+        classifier = self.make_classifier()
+        features = self.make_features()
 
+        # WHEN we predict class
         pred = classifier.predict(features)
 
-        # predict returns 1 when proba >= 0.5
+        # THEN prediction is 1 (proba >= 0.5)
         assert pred == 1
 
-    def test_partial_fit_increments_count(self):
-        """partial_fit increases sample count."""
-        classifier = OnlineClassifier()
-        features = self._make_features()
+    # =========================================================================
+    # Tests - Training (partial_fit)
+    # =========================================================================
 
+    def test_partial_fit_increments_sample_count(self):
+        """partial_fit increases sample count by one."""
+        # GIVEN a new classifier
+        classifier = self.make_classifier()
+        features = self.make_features()
+
+        # WHEN we fit one sample
         classifier.partial_fit(features, 0)
 
+        # THEN sample count is 1
         assert classifier.sample_count == 1
 
-    def test_partial_fit_tracks_classes(self):
+    def test_partial_fit_tracks_class_counts(self):
         """partial_fit tracks samples by class."""
-        classifier = OnlineClassifier()
-        features = self._make_features()
-
+        # GIVEN a classifier with samples of both classes
+        classifier = self.make_classifier()
+        features = self.make_features()
         classifier.partial_fit(features, 0)
         classifier.partial_fit(features, 1)
         classifier.partial_fit(features, 0)
 
+        # WHEN we get stats (no action)
         stats = classifier.get_stats()
+
+        # THEN class counts are correct
         assert stats.samples_no_change == 2
         assert stats.samples_change == 1
 
-    def test_is_ready_after_min_samples(self):
+    def test_is_ready_after_min_samples_per_class(self):
         """Model is ready after MIN_SAMPLES_PER_CLASS of each class."""
-        classifier = OnlineClassifier()
-
-        # Add samples of each class
+        # GIVEN a classifier trained with enough samples
+        classifier = self.make_classifier()
         for i in range(OnlineClassifier.MIN_SAMPLES_PER_CLASS):
-            classifier.partial_fit(self._make_features(spread_bps=i), 0)
-            classifier.partial_fit(self._make_features(spread_bps=i + 100), 1)
+            classifier.partial_fit(self.make_features(spread_bps=i), 0)
+            classifier.partial_fit(self.make_features(spread_bps=i + 100), 1)
 
-        assert classifier.is_ready is True
+        # WHEN we check readiness (no action)
+        ready = classifier.is_ready
 
-    def test_predict_after_fit(self):
-        """predict returns 0 or 1 after fitting."""
-        classifier = OnlineClassifier()
+        # THEN it's ready
+        assert ready is True
 
-        # Train with some samples
-        for i in range(50):
-            classifier.partial_fit(self._make_features(spread_bps=i), 0)
-            classifier.partial_fit(self._make_features(spread_bps=i + 100), 1)
+    # =========================================================================
+    # Tests - Predictions After Training
+    # =========================================================================
 
-        pred = classifier.predict(self._make_features())
+    def test_predict_returns_valid_class_after_training(self):
+        """predict returns 0 or 1 after training."""
+        # GIVEN a trained classifier
+        classifier = self.make_trained_classifier()
 
+        # WHEN we predict
+        pred = classifier.predict(self.make_features())
+
+        # THEN prediction is 0 or 1
         assert pred in [0, 1]
 
-    def test_predict_proba_range(self):
-        """predict_proba returns value in [0, 1] after fitting."""
-        classifier = OnlineClassifier()
+    def test_predict_proba_in_valid_range_after_training(self):
+        """predict_proba returns value in [0, 1] after training."""
+        # GIVEN a trained classifier
+        classifier = self.make_trained_classifier()
 
-        # Train with some samples
-        for i in range(50):
-            classifier.partial_fit(self._make_features(spread_bps=i), 0)
-            classifier.partial_fit(self._make_features(spread_bps=i + 100), 1)
+        # WHEN we predict probability
+        proba = classifier.predict_proba(self.make_features())
 
-        proba = classifier.predict_proba(self._make_features())
-
+        # THEN probability is in valid range
         assert 0.0 <= proba <= 1.0
 
-    def test_record_prediction_accuracy(self):
-        """record_prediction tracks accuracy correctly."""
-        classifier = OnlineClassifier()
+    # =========================================================================
+    # Tests - Accuracy Tracking
+    # =========================================================================
 
-        # Record some predictions
+    def test_record_prediction_tracks_accuracy(self):
+        """record_prediction tracks prediction accuracy."""
+        # GIVEN a classifier with recorded predictions
+        classifier = self.make_classifier()
         classifier.record_prediction(1, 1)  # correct
         classifier.record_prediction(0, 0)  # correct
         classifier.record_prediction(1, 0)  # wrong
-
-        # Need at least 10 for accuracy to show
+        # Add more to reach minimum for accuracy calculation
         for _ in range(10):
             classifier.record_prediction(1, 1)
 
+        # WHEN we get stats (no action)
         stats = classifier.get_stats()
+
+        # THEN accuracy is tracked and above 0.5
         assert stats.accuracy_recent is not None
         assert stats.accuracy_recent > 0.5
 
-    def test_get_stats_weights(self):
-        """get_stats includes feature weights after fitting."""
-        classifier = OnlineClassifier()
+    # =========================================================================
+    # Tests - Statistics
+    # =========================================================================
 
-        # Train with some samples
-        for i in range(50):
-            classifier.partial_fit(self._make_features(spread_bps=i), 0)
-            classifier.partial_fit(self._make_features(spread_bps=i + 100), 1)
+    def test_get_stats_includes_feature_weights(self):
+        """get_stats includes feature weights after training."""
+        # GIVEN a trained classifier
+        classifier = self.make_trained_classifier()
 
+        # WHEN we get stats (no action)
         stats = classifier.get_stats()
 
+        # THEN weights include all features
         assert "spread_bps" in stats.weights
         assert "imbalance" in stats.weights
         assert "depth" in stats.weights
         assert "volatility" in stats.weights
 
-    def test_get_stats_ready_pct(self):
+    def test_get_stats_shows_ready_percentage(self):
         """get_stats shows progress toward ready state."""
-        classifier = OnlineClassifier()
-
-        # Add 50 of each class (half of MIN_SAMPLES_PER_CLASS=100)
+        # GIVEN a classifier with 50% of required samples
+        classifier = self.make_classifier()
         for i in range(50):
-            classifier.partial_fit(self._make_features(spread_bps=i), 0)
-            classifier.partial_fit(self._make_features(spread_bps=i + 100), 1)
+            classifier.partial_fit(self.make_features(spread_bps=i), 0)
+            classifier.partial_fit(self.make_features(spread_bps=i + 100), 1)
 
+        # WHEN we get stats (no action)
         stats = classifier.get_stats()
 
+        # THEN ready_pct is 50%
         assert stats.ready_pct == 50.0
