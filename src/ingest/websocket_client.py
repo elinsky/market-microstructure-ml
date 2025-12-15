@@ -39,7 +39,7 @@ class CoinbaseWebSocketClient:
         self.symbol = symbol
         self.on_update = on_update
         self._running = False
-        self._ws: websockets.WebSocketClientProtocol | None = None
+        self._ws: websockets.ClientConnection | None = None
 
     async def start(self) -> None:
         """Start the WebSocket client with reconnection logic."""
@@ -85,6 +85,8 @@ class CoinbaseWebSocketClient:
 
             # Process messages
             async for message in ws:
+                if isinstance(message, bytes):
+                    message = message.decode("utf-8")
                 await self._handle_message(message)
 
     async def _handle_message(self, message: str) -> None:

@@ -671,6 +671,13 @@ def create_app() -> Dash:
         if _current_candle is not None:
             candles = candles + [_current_candle]
 
+        opens: list[float] = []
+        highs: list[float] = []
+        lows: list[float] = []
+        closes: list[float] = []
+        x_vals: list[int] = []
+        y_range: list[float] | None = None
+
         if candles:
             opens = [c.open for c in candles]
             highs = [c.high for c in candles]
@@ -684,9 +691,6 @@ def create_app() -> Dash:
             y_max = max(all_prices)
             y_padding = (y_max - y_min) * 0.1 if y_max > y_min else 10
             y_range = [y_min - y_padding, y_max + y_padding]
-        else:
-            opens = highs = lows = closes = x_vals = []
-            y_range = None
 
         price_chart = {
             "data": [
