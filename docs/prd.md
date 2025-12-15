@@ -49,7 +49,6 @@ Basically: **streaming data -> features -> predictions -> trading decisions -> d
 - Running on Google Cloud Run
 - Simple rolling accuracy tracking
 
-It works, but it's an MVP.
 
 ---
 

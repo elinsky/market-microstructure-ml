@@ -81,7 +81,7 @@ Model is considered "ready" after:
 - $n_0 \geq 100$ samples of class 0 (no change)
 - $n_1 \geq 100$ samples of class 1 (price changed)
 
-Before ready, model outputs $P(y=1) = 0.5$ (maximum uncertainty).
+Before the first training sample, model outputs $P(y=1) = 0.5$ (maximum uncertainty). After fitting begins, predictions are made even before reaching the readiness threshold.
 
 ## Accuracy Tracking
 
