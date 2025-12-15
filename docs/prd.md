@@ -56,74 +56,74 @@ Basically: **streaming data -> features -> predictions -> trading decisions -> d
 
 ### Data
 
-| Want | Why | Epic |
-|------|-----|------|
-| More depth (10-20 levels, not 3) | Better features, more signal | [#35](https://github.com/elinsky/market-microstructure-ml/issues/35) |
-| Trade data (matches channel) | Trade flow imbalance, aggressor detection | [#35](https://github.com/elinsky/market-microstructure-ml/issues/35) |
-| Save data to disk (Parquet or DB) | Backtesting, retraining | [#35](https://github.com/elinsky/market-microstructure-ml/issues/35) |
-| Replay historical data | Test models on past data | [#35](https://github.com/elinsky/market-microstructure-ml/issues/35) |
-| Multi-symbol (BTC + ETH) | Shows it's not hardcoded | - |
+| Want | Why | Epic | Status |
+|------|-----|------|--------|
+| More depth (10-20 levels, not 3) | Better features, more signal | [#35](https://github.com/elinsky/market-microstructure-ml/issues/35) | done |
+| Trade data (matches channel) | Trade flow imbalance, aggressor detection | [#35](https://github.com/elinsky/market-microstructure-ml/issues/35) | done |
+| Save data to disk (Parquet or DB) | Backtesting, retraining | [#35](https://github.com/elinsky/market-microstructure-ml/issues/35) | in progress |
+| Replay historical data | Test models on past data | [#35](https://github.com/elinsky/market-microstructure-ml/issues/35) | - |
+| Multi-symbol (BTC + ETH) | Shows it's not hardcoded | - | - |
 
 ### Features
 
-| Want | Why | Epic |
-|------|-----|------|
-| Keep current 4 | They work | done |
-| Trade flow features (trade_imbalance, OFI) | Volume imbalance tells you something | [#56](https://github.com/elinsky/market-microstructure-ml/issues/56) |
-| Microprice | Better fair value than mid price | [#56](https://github.com/elinsky/market-microstructure-ml/issues/56) |
-| Book pressure (multi-level imbalance) | Deeper LOB signal | [#56](https://github.com/elinsky/market-microstructure-ml/issues/56) |
-| Realized volatility | Regime detection | [#56](https://github.com/elinsky/market-microstructure-ml/issues/56) |
-| Add lag features (t-1, t-5, t-10) | Temporal patterns | - |
-| Raw LOB as tensor | Feed to Transformer directly | - |
+| Want | Why | Epic | Status |
+|------|-----|------|--------|
+| Keep current 4 | They work | - | done |
+| Trade flow features (trade_imbalance, OFI) | Volume imbalance tells you something | [#56](https://github.com/elinsky/market-microstructure-ml/issues/56) | - |
+| Microprice | Better fair value than mid price | [#56](https://github.com/elinsky/market-microstructure-ml/issues/56) | - |
+| Book pressure (multi-level imbalance) | Deeper LOB signal | [#56](https://github.com/elinsky/market-microstructure-ml/issues/56) | - |
+| Realized volatility | Regime detection | [#56](https://github.com/elinsky/market-microstructure-ml/issues/56) | - |
+| Add lag features (t-1, t-5, t-10) | Temporal patterns | - | - |
+| Raw LOB as tensor | Feed to Transformer directly | - | - |
 
 ### Prediction Models
 
-| Want | Why | Epic |
-|------|-----|------|
-| Keep SGD as baseline | Simple, online, something to compare against | done |
-| Add Transformer | Deep learning checkbox, modern architecture | - |
-| Multiple horizons (100ms, 500ms, 1s) | More interesting prediction task | - |
-| Model registry (MLflow or whatever) | Version models, track experiments | - |
-| Batch retraining pipeline | Not just online learning | - |
+| Want | Why | Epic | Status |
+|------|-----|------|--------|
+| Keep SGD as baseline | Simple, online, something to compare against | - | done |
+| Add Transformer | Deep learning checkbox, modern architecture | - | - |
+| Multiple horizons (100ms, 500ms, 1s) | More interesting prediction task | - | - |
+| Model registry (MLflow or whatever) | Version models, track experiments | - | - |
+| Batch retraining pipeline | Not just online learning | - | - |
 
 ### RL Agent
 
-| Want | Why | Epic |
-|------|-----|------|
-| Market simulator | Replay data, simulate fills | - |
-| Realistic costs | Slippage, fees, market impact | - |
-| State = market features + predictions + position | Everything the agent needs | - |
-| Actions = buy/sell/hold | Start simple | - |
-| Reward = PnL - costs - inventory penalty | Standard setup | - |
-| PPO or SAC | Modern, stable algorithms | - |
-| Benchmark against TWAP, buy-and-hold | Need something to compare to | - |
+| Want | Why | Epic | Status |
+|------|-----|------|--------|
+| Market simulator | Replay data, simulate fills | - | - |
+| Realistic costs | Slippage, fees, market impact | - | - |
+| State = market features + predictions + position | Everything the agent needs | - | - |
+| Actions = buy/sell/hold | Start simple | - | - |
+| Reward = PnL - costs - inventory penalty | Standard setup | - | - |
+| PPO or SAC | Modern, stable algorithms | - | - |
+| Benchmark against TWAP, buy-and-hold | Need something to compare to | - | - |
 
 ### Evaluation
 
-| Want | Why | Epic |
-|------|-----|------|
-| Walk-forward backtesting | Proper out-of-sample testing | - |
-| Prediction metrics: AUC, Brier, calibration | Not just accuracy | - |
-| Trading metrics: Sharpe, drawdown | Standard quant metrics | - |
-| Feature importance (SHAP) | Explain what's driving predictions | - |
+| Want | Why | Epic | Status |
+|------|-----|------|--------|
+| Walk-forward backtesting | Proper out-of-sample testing | - | - |
+| Prediction metrics: AUC, Brier, calibration | Not just accuracy | - | - |
+| Trading metrics: Sharpe, drawdown | Standard quant metrics | - | - |
+| Feature importance (SHAP) | Explain what's driving predictions | - | - |
 
 ### Dashboard
 
-| Want | Why | Epic |
-|------|-----|------|
-| Keep current views | They're fine | done |
-| Add model comparison (SGD vs Transformer) | Show the difference | - |
-| Add RL view (equity curve, position, actions) | See the agent work | - |
-| Backtest results | Show historical performance | - |
+| Want | Why | Epic | Status |
+|------|-----|------|--------|
+| Keep current views | They're fine | - | done |
+| Add model comparison (SGD vs Transformer) | Show the difference | - | - |
+| Add RL view (equity curve, position, actions) | See the agent work | - | - |
+| Backtest results | Show historical performance | - | - |
 
 ### Infrastructure
 
-| Want | Why | Epic |
-|------|-----|------|
-| Keep Cloud Run | It works | done |
-| Add model registry | Track versions | - |
-| Add retraining job | Keep model fresh | - |
-| More tests | Confidence in changes | [#35](https://github.com/elinsky/market-microstructure-ml/issues/35) |
+| Want | Why | Epic | Status |
+|------|-----|------|--------|
+| Keep Cloud Run | It works | - | done |
+| Add model registry | Track versions | - | - |
+| Add retraining job | Keep model fresh | - | - |
+| More tests | Confidence in changes | [#35](https://github.com/elinsky/market-microstructure-ml/issues/35) | done |
 
 ---
 
