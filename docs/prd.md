@@ -69,8 +69,11 @@ Basically: **streaming data -> features -> predictions -> trading decisions -> d
 | Want | Why | Epic |
 |------|-----|------|
 | Keep current 4 | They work | done |
+| Trade flow features (trade_imbalance, OFI) | Volume imbalance tells you something | [#56](https://github.com/elinsky/market-microstructure-ml/issues/56) |
+| Microprice | Better fair value than mid price | [#56](https://github.com/elinsky/market-microstructure-ml/issues/56) |
+| Book pressure (multi-level imbalance) | Deeper LOB signal | [#56](https://github.com/elinsky/market-microstructure-ml/issues/56) |
+| Realized volatility | Regime detection | [#56](https://github.com/elinsky/market-microstructure-ml/issues/56) |
 | Add lag features (t-1, t-5, t-10) | Temporal patterns | - |
-| Trade flow features | Volume imbalance tells you something | - |
 | Raw LOB as tensor | Feed to Transformer directly | - |
 
 ### Prediction Models
@@ -215,3 +218,10 @@ General:
 | Software engineering | Tests, docs, clean code |
 | Math rigor | Proper metrics, statistical tests |
 | Domain knowledge | Microstructure, order flow, trading costs |
+
+---
+
+## References
+
+**Market Microstructure:**
+- Bouchaud et al. (2018) "Trades, Quotes and Prices: Financial Markets Under the Microscope" - primary reference for feature ideas and market mechanics
