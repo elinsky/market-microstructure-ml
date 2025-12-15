@@ -1,4 +1,4 @@
-"""Order book cache maintaining top-N bid/ask levels."""
+"""Order book cache maintaining top-10 bid/ask levels."""
 
 import threading
 from dataclasses import dataclass
@@ -24,7 +24,7 @@ class OrderBook:
     Processes Coinbase L2 snapshot and update messages.
     """
 
-    def __init__(self, depth: int = 3):
+    def __init__(self, depth: int = 10):
         """Initialize order book.
 
         Args:
