@@ -140,7 +140,40 @@ gcloud run deploy quotewatch \
   --allow-unauthenticated
 ```
 
-## 6. State Machine
+## 6. Threading Model
+
+The system uses a hybrid async/sync architecture that requires thread-safe shared state.
+
+```mermaid
+flowchart LR
+    subgraph AsyncContext["Async Context (asyncio)"]
+        WS[WebSocket Client]
+        WS -->|writes| OB[OrderBook]
+        WS -->|writes| TB[TradeBuffer]
+    end
+
+    subgraph SyncContext["Sync Context (Flask/Dash thread)"]
+        Dash[Dashboard]
+        Dash -->|reads| OB
+        Dash -->|reads| TB
+    end
+
+    OB -.->|RLock| Safe[Thread-Safe Access]
+    TB -.->|RLock| Safe
+```
+
+**Why threading is needed:**
+- The WebSocket client runs in an async event loop (asyncio)
+- The Dash dashboard runs in a synchronous Flask thread
+- Both need to access the same `OrderBook` and `TradeBuffer` instances
+- `threading.RLock` ensures safe concurrent access between async writes and sync reads
+
+**Thread-safe components:**
+- `OrderBook`: RLock protects bid/ask updates and snapshot reads
+- `TradeBuffer`: RLock protects trade buffer modifications and queries
+- `DataWriter` (planned): RLock will protect write buffers
+
+## 7. State Machine
 
 WebSocket client connection resilience.
 
