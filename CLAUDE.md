@@ -60,6 +60,31 @@ Branch protection blocks merging until `lint` and `test` jobs pass.
 
 **Use fast-forward merges** (rebase and merge) for a clean linear history - no merge commits.
 
+## Documentation & Tracking
+
+**Everything gets tracked, everything gets documented.**
+
+### GitHub Issues
+- **Create issues before coding** - all work should be tracked in an issue
+- **Groom issues before starting** - add requirements, tasks, acceptance criteria
+- **Capture ideas as issues** - create backlog issues for "someday" work
+- Update issue checkboxes as tasks are completed
+- Link PRs to issues with "Closes #XX" in PR description
+- Update epic checkboxes when child issues are completed
+- Add implementation notes to issues when decisions are made
+
+### Documentation Updates
+Each PR should include relevant doc updates:
+- `docs/architecture.md` - Component diagrams, data flow changes
+- `docs/design/data-layer.md` - Implementation progress section
+- `CHANGELOG.md` - User-facing changes under [Unreleased]
+- Code docstrings - Keep in sync with implementation
+
+### Commit Discipline
+- Atomic commits - one logical change per commit
+- Update docs in the same commit as code changes (not separate)
+- PR description summarizes what changed and why
+
 ## Project Structure
 
 ```
