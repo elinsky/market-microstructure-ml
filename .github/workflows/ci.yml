@@ -29,7 +29,7 @@ jobs:
         run: ruff check .
 
       - name: Type check with mypy
-        run: mypy src --ignore-missing-imports || echo "::warning::mypy found type errors (non-blocking)"
+        run: mypy src --ignore-missing-imports
 
   test:
     runs-on: ubuntu-latest

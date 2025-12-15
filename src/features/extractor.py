@@ -138,4 +138,4 @@ class FeatureExtractor:
         # Compute standard deviation
         mean = sum(changes) / len(changes)
         variance = sum((x - mean) ** 2 for x in changes) / len(changes)
-        return variance**0.5
+        return float(variance**0.5)

@@ -18,5 +18,3 @@ repos:
         args: [--ignore-missing-imports]
         additional_dependencies: []
         verbose: true
-        # TODO: Remove this once mypy errors are fixed (see #37)
-        stages: [manual]
