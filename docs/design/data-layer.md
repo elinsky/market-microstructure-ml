@@ -543,3 +543,42 @@ Configuration is driven by environment variables (`ICEBERG_CATALOG_URI`, `ICEBER
    - Catalog connectivity
    - Table creation and idempotency
    - Schema validation for all 4 tables
+
+### Step 4: Increase Order Book Depth to 10 (Issue #44)
+
+**Status:** Complete (PR #45)
+
+**What was implemented:**
+
+1. Changed default depth from 3 to 10 in `OrderBook.__init__()`
+2. Updated `QuoteWatchRunner` to use `depth=10`
+3. Updated all documentation referencing "top-3" to "top-10"
+
+### Step 5: Add Matches Channel + TradeBuffer (Issue #46)
+
+**Status:** Complete (PR #55)
+
+**What was implemented:**
+
+1. **Trade dataclass** (`src/ingest/trade_buffer.py`)
+   - `trade_id`, `timestamp_ms`, `price`, `size`, `side`
+   - Decimal precision for price/size
+
+2. **TradeBuffer class** (`src/ingest/trade_buffer.py`)
+   - Thread-safe deque with configurable `max_trades` (default 1000)
+   - `add_trade()`, `get_recent()`, `get_trades_since()`, `clear()`
+   - RLock for thread safety
+
+3. **WebSocket client changes** (`src/ingest/websocket_client.py`)
+   - Optional `trade_buffer` parameter
+   - Optional `on_trade` callback
+   - Subscribes to `matches` channel when trade_buffer is provided
+   - Handles `match` message type
+   - ISO8601 timestamp parsing to epoch milliseconds
+
+4. **Exports** (`src/ingest/__init__.py`)
+   - `Trade` and `TradeBuffer` now exported
+
+5. **Tests**
+   - 15 tests for TradeBuffer (add, get_recent, get_trades_since, max_trades, thread safety)
+   - 6 tests for WebSocket match handling
