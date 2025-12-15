@@ -9,13 +9,17 @@ from src.ingest.order_book import OrderBookSnapshot
 class TestFeatureExtractor:
     """Tests for FeatureExtractor class."""
 
-    def _make_snapshot(
+    # =========================================================================
+    # Test Data Helpers
+    # =========================================================================
+
+    def make_snapshot(
         self,
         bids: list[tuple[str, str]] | None = None,
         asks: list[tuple[str, str]] | None = None,
         timestamp: str | None = None,
     ) -> OrderBookSnapshot:
-        """Helper to create an OrderBookSnapshot."""
+        """Create an OrderBookSnapshot from string tuples."""
         bid_list = [(Decimal(p), Decimal(s)) for p, s in (bids or [])]
         ask_list = [(Decimal(p), Decimal(s)) for p, s in (asks or [])]
 
@@ -38,133 +42,165 @@ class TestFeatureExtractor:
             timestamp=timestamp,
         )
 
-    def test_empty_snapshot_returns_none(self):
-        """Returns None for empty order book."""
-        extractor = FeatureExtractor()
-        snapshot = self._make_snapshot()
-
-        result = extractor.compute(snapshot)
-
-        assert result is None
-
-    def test_spread_bps_calculation(self):
-        """Spread is computed correctly in basis points."""
-        extractor = FeatureExtractor()
-        # bid=100, ask=101, mid=100.5, spread=1
-        # spread_bps = (1 / 100.5) * 10000 ≈ 99.5
-        snapshot = self._make_snapshot(
+    def make_balanced_snapshot(self) -> OrderBookSnapshot:
+        """Snapshot with equal bid/ask volumes (imbalance = 0)."""
+        return self.make_snapshot(
             bids=[("100.00", "1.0")],
             asks=[("101.00", "1.0")],
         )
 
-        result = extractor.compute(snapshot)
-
-        assert result is not None
-        assert abs(result.spread_bps - 99.5) < 0.1
-
-    def test_imbalance_balanced(self):
-        """Imbalance is 0 when bid and ask volumes are equal."""
-        extractor = FeatureExtractor()
-        snapshot = self._make_snapshot(
-            bids=[("100.00", "1.0")],
-            asks=[("101.00", "1.0")],
-        )
-
-        result = extractor.compute(snapshot)
-
-        assert result is not None
-        assert result.imbalance == 0.0
-
-    def test_imbalance_bid_heavy(self):
-        """Positive imbalance when bid volume exceeds ask volume."""
-        extractor = FeatureExtractor()
-        # bid_vol=2.0, ask_vol=1.0 -> imbalance = (2-1)/(2+1) = 0.333
-        snapshot = self._make_snapshot(
+    def make_bid_heavy_snapshot(self) -> OrderBookSnapshot:
+        """Snapshot with more bid volume (positive imbalance)."""
+        return self.make_snapshot(
             bids=[("100.00", "2.0")],
             asks=[("101.00", "1.0")],
         )
 
-        result = extractor.compute(snapshot)
-
-        assert result is not None
-        assert abs(result.imbalance - 0.333) < 0.01
-
-    def test_imbalance_ask_heavy(self):
-        """Negative imbalance when ask volume exceeds bid volume."""
-        extractor = FeatureExtractor()
-        # bid_vol=1.0, ask_vol=2.0 -> imbalance = (1-2)/(1+2) = -0.333
-        snapshot = self._make_snapshot(
+    def make_ask_heavy_snapshot(self) -> OrderBookSnapshot:
+        """Snapshot with more ask volume (negative imbalance)."""
+        return self.make_snapshot(
             bids=[("100.00", "1.0")],
             asks=[("101.00", "2.0")],
         )
 
-        result = extractor.compute(snapshot)
-
-        assert result is not None
-        assert abs(result.imbalance + 0.333) < 0.01
-
-    def test_depth_calculation(self):
-        """Depth is sum of all bid and ask volumes."""
-        extractor = FeatureExtractor()
-        # Total: 1.0 + 2.0 + 1.5 + 2.5 = 7.0
-        snapshot = self._make_snapshot(
+    def make_multi_level_snapshot(self) -> OrderBookSnapshot:
+        """Snapshot with multiple price levels for depth calculation."""
+        return self.make_snapshot(
             bids=[("100.00", "1.0"), ("99.00", "2.0")],
             asks=[("101.00", "1.5"), ("102.00", "2.5")],
         )
 
+    # =========================================================================
+    # Tests
+    # =========================================================================
+
+    def test_compute_returns_none_for_empty_snapshot(self):
+        """Returns None when order book has no data."""
+        # GIVEN an extractor and an empty snapshot
+        extractor = FeatureExtractor()
+        snapshot = self.make_snapshot()
+
+        # WHEN we compute features
         result = extractor.compute(snapshot)
 
+        # THEN result is None
+        assert result is None
+
+    def test_spread_bps_calculation(self):
+        """Spread is computed correctly in basis points."""
+        # GIVEN an extractor and a snapshot with bid=100, ask=101
+        extractor = FeatureExtractor()
+        snapshot = self.make_balanced_snapshot()
+        # spread=1, mid=100.5, spread_bps = (1/100.5) * 10000 ≈ 99.5
+
+        # WHEN we compute features
+        result = extractor.compute(snapshot)
+
+        # THEN spread_bps is approximately 99.5
+        assert result is not None
+        assert abs(result.spread_bps - 99.5) < 0.1
+
+    def test_imbalance_zero_when_balanced(self):
+        """Imbalance is 0 when bid and ask volumes are equal."""
+        # GIVEN an extractor and a balanced snapshot
+        extractor = FeatureExtractor()
+        snapshot = self.make_balanced_snapshot()
+
+        # WHEN we compute features
+        result = extractor.compute(snapshot)
+
+        # THEN imbalance is 0
+        assert result is not None
+        assert result.imbalance == 0.0
+
+    def test_imbalance_positive_when_bid_heavy(self):
+        """Positive imbalance when bid volume exceeds ask volume."""
+        # GIVEN an extractor and a bid-heavy snapshot (2.0 bid, 1.0 ask)
+        extractor = FeatureExtractor()
+        snapshot = self.make_bid_heavy_snapshot()
+        # imbalance = (2-1)/(2+1) = 0.333
+
+        # WHEN we compute features
+        result = extractor.compute(snapshot)
+
+        # THEN imbalance is positive (~0.333)
+        assert result is not None
+        assert abs(result.imbalance - 0.333) < 0.01
+
+    def test_imbalance_negative_when_ask_heavy(self):
+        """Negative imbalance when ask volume exceeds bid volume."""
+        # GIVEN an extractor and an ask-heavy snapshot (1.0 bid, 2.0 ask)
+        extractor = FeatureExtractor()
+        snapshot = self.make_ask_heavy_snapshot()
+        # imbalance = (1-2)/(1+2) = -0.333
+
+        # WHEN we compute features
+        result = extractor.compute(snapshot)
+
+        # THEN imbalance is negative (~-0.333)
+        assert result is not None
+        assert abs(result.imbalance + 0.333) < 0.01
+
+    def test_depth_sums_all_volumes(self):
+        """Depth is sum of all bid and ask volumes."""
+        # GIVEN an extractor and a multi-level snapshot
+        extractor = FeatureExtractor()
+        snapshot = self.make_multi_level_snapshot()
+        # Total: 1.0 + 2.0 + 1.5 + 2.5 = 7.0
+
+        # WHEN we compute features
+        result = extractor.compute(snapshot)
+
+        # THEN depth equals total volume
         assert result is not None
         assert result.depth == 7.0
 
-    def test_volatility_initial_zero(self):
+    def test_volatility_zero_with_single_price(self):
         """Volatility is 0 with only one price point."""
+        # GIVEN an extractor and a single snapshot
         extractor = FeatureExtractor()
-        snapshot = self._make_snapshot(
-            bids=[("100.00", "1.0")],
-            asks=[("101.00", "1.0")],
-        )
+        snapshot = self.make_balanced_snapshot()
 
+        # WHEN we compute features (first price point)
         result = extractor.compute(snapshot)
 
+        # THEN volatility is 0 (need 2+ points for std)
         assert result is not None
         assert result.volatility == 0.0
 
     def test_volatility_increases_with_price_changes(self):
-        """Volatility increases when prices change."""
+        """Volatility increases when prices change significantly."""
+        # GIVEN an extractor with a small window
         extractor = FeatureExtractor(volatility_window=10)
 
-        # First snapshot - volatility 0 (only 1 point)
-        result1 = extractor.compute(
-            self._make_snapshot(bids=[("100.00", "1.0")], asks=[("101.00", "1.0")])
+        # WHEN we feed it prices that move around
+        extractor.compute(
+            self.make_snapshot(bids=[("100.00", "1.0")], asks=[("101.00", "1.0")])
         )
-        assert result1 is not None
-        assert result1.volatility == 0.0
-
-        # Second snapshot - volatility 0 (std of single change is 0)
-        result2 = extractor.compute(
-            self._make_snapshot(bids=[("102.00", "1.0")], asks=[("103.00", "1.0")])
+        extractor.compute(
+            self.make_snapshot(bids=[("102.00", "1.0")], asks=[("103.00", "1.0")])
         )
-        assert result2 is not None
-        # With only 2 prices, we have 1 change, std of 1 value is 0
-
-        # Third snapshot with different magnitude change - now volatility > 0
-        result3 = extractor.compute(
-            self._make_snapshot(bids=[("100.00", "1.0")], asks=[("101.00", "1.0")])
+        result = extractor.compute(
+            self.make_snapshot(bids=[("100.00", "1.0")], asks=[("101.00", "1.0")])
         )
-        assert result3 is not None
-        assert result3.volatility > 0.0
 
-    def test_timestamp_preserved(self):
+        # THEN volatility is greater than 0
+        assert result is not None
+        assert result.volatility > 0.0
+
+    def test_timestamp_preserved_in_result(self):
         """Timestamp is passed through to FeatureSnapshot."""
+        # GIVEN an extractor and a snapshot with a timestamp
         extractor = FeatureExtractor()
-        snapshot = self._make_snapshot(
+        snapshot = self.make_snapshot(
             bids=[("100.00", "1.0")],
             asks=[("101.00", "1.0")],
             timestamp="2024-01-01T00:00:00Z",
         )
 
+        # WHEN we compute features
         result = extractor.compute(snapshot)
 
+        # THEN timestamp is preserved
         assert result is not None
         assert result.timestamp == "2024-01-01T00:00:00Z"
