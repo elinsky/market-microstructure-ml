@@ -439,7 +439,7 @@ Configuration is driven by environment variables (`ICEBERG_CATALOG_URI`, `ICEBER
 
 ## 8. Open Questions
 
-1. **Exact depth?** 10 or 20 levels? (Leaning toward 10 to start)
+1. ~~**Exact depth?**~~ **Resolved:** 10 levels to start
 2. **Retention policy?** How long to keep data? (Maybe 30 days to start)
 3. **GCS bucket setup?** Need to create bucket, set up auth for Cloud Run
 4. ~~**Catalog in prod?**~~ **Resolved:** Postgres everywhere (Docker locally, Cloud SQL in prod)
@@ -505,3 +505,41 @@ Configuration is driven by environment variables (`ICEBERG_CATALOG_URI`, `ICEBER
 | `tests/test_trade_buffer.py` | Create | Tests |
 | `tests/test_writer.py` | Create | Tests |
 | `tests/test_reader.py` | Create | Tests |
+
+---
+
+## 11. Implementation Progress
+
+### Step 3: Iceberg Catalog + Table Schemas (Issue #41)
+
+**Status:** Complete
+
+**What was implemented:**
+
+1. **Docker setup** (`docker-compose.yml`)
+   - Postgres 16 container for Iceberg catalog
+   - Health checks for reliable startup
+   - Persistent volume for data
+
+2. **Dependencies** (`pyproject.toml`)
+   - `pyiceberg[sql-postgres]>=0.7.0`
+   - `psycopg2-binary>=2.9`
+
+3. **Storage package** (`src/storage/`)
+   - `catalog.py`: Factory function loading from `ICEBERG_CATALOG_URI` and `ICEBERG_WAREHOUSE` env vars
+   - `schemas.py`: All 4 table schemas with flattened column naming
+
+4. **Table schemas implemented:**
+   - `raw_orderbook`: 10 levels of bids/asks with `bid_N_price`, `bid_N_size` naming
+   - `raw_trades`: trade_id, price, size, side with decimal(18,8) precision
+   - `features`: spread_bps, imbalance, depth, volatility, trade_imbalance
+   - `predictions`: model_id, prediction, probability, label, labeled_at_ms
+
+5. **CI/CD** (`.github/workflows/ci.yml`)
+   - Postgres 16 service container
+   - Environment variables for catalog connection
+
+6. **Integration tests** (`tests/storage/test_catalog.py`)
+   - Catalog connectivity
+   - Table creation and idempotency
+   - Schema validation for all 4 tables
