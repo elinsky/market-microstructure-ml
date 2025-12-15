@@ -394,7 +394,18 @@ class DataReader:
 
 ## 7. Storage Configuration
 
+We use **Postgres for the Iceberg catalog** in both dev and prod for consistency.
+
 ### 7.1 Local (Development)
+
+Run Postgres via Docker:
+
+```bash
+docker run -d --name quotewatch-pg -p 5432:5432 \
+  -e POSTGRES_PASSWORD=localdev \
+  -e POSTGRES_DB=iceberg \
+  postgres:16
+```
 
 ```python
 from pyiceberg.catalog import load_catalog
@@ -403,8 +414,8 @@ catalog = load_catalog(
     "local",
     **{
         "type": "sql",
-        "uri": "sqlite:///data/catalog.db",
-        "warehouse": "data/warehouse",
+        "uri": "postgresql+psycopg2://postgres:localdev@localhost:5432/iceberg",
+        "warehouse": "file://data/warehouse",
     }
 )
 ```
@@ -413,14 +424,16 @@ catalog = load_catalog(
 
 ```python
 catalog = load_catalog(
-    "gcs",
+    "prod",
     **{
         "type": "sql",
-        "uri": "sqlite:///tmp/catalog.db",  # Or use a proper metastore
+        "uri": "postgresql+psycopg2://user:pass@cloud-sql-host:5432/iceberg",
         "warehouse": "gs://quotewatch-data/warehouse",
     }
 )
 ```
+
+Configuration is driven by environment variables (`ICEBERG_CATALOG_URI`, `ICEBERG_WAREHOUSE`).
 
 ---
 
@@ -429,7 +442,7 @@ catalog = load_catalog(
 1. **Exact depth?** 10 or 20 levels? (Leaning toward 10 to start)
 2. **Retention policy?** How long to keep data? (Maybe 30 days to start)
 3. **GCS bucket setup?** Need to create bucket, set up auth for Cloud Run
-4. **Catalog in prod?** SQLite is fine for dev, but might want a real metastore for prod
+4. ~~**Catalog in prod?**~~ **Resolved:** Postgres everywhere (Docker locally, Cloud SQL in prod)
 
 ---
 
