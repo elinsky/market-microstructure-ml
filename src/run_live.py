@@ -7,11 +7,15 @@ import signal
 import sys
 import threading
 import time
+from dataclasses import dataclass
 
 from src.dashboard.app import create_app, update_shared_state
-from src.features import FeatureExtractor, Labeler, StabilityScorer
+from src.features import FeatureExtractor, FeatureSnapshot, Labeler, StabilityScorer
+from src.features.stability import StabilityScore
 from src.ingest import CoinbaseWebSocketClient, OrderBook
+from src.ingest.order_book import OrderBookSnapshot
 from src.model import OnlineClassifier
+from src.model.classifier import ModelStats
 
 # Configure logging
 logging.basicConfig(
@@ -19,6 +23,16 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class PipelineResult:
+    """Result of processing an order book snapshot through the ML pipeline."""
+
+    features: FeatureSnapshot | None
+    stability: StabilityScore | None
+    prediction_proba: float | None
+    model_stats: ModelStats | None
 
 
 class QuoteWatchRunner:
@@ -47,10 +61,21 @@ class QuoteWatchRunner:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._thread: threading.Thread | None = None
 
-    def _on_order_book_update(self) -> None:
-        """Callback when order book is updated."""
-        snapshot = self.order_book.get_snapshot()
+    def process_snapshot(
+        self, snapshot: OrderBookSnapshot, timestamp_ms: float
+    ) -> PipelineResult:
+        """Process an order book snapshot through the ML pipeline.
 
+        Extracts features, computes stability score, runs ML prediction,
+        and trains the model if a labeled sample is available.
+
+        Args:
+            snapshot: Current order book snapshot.
+            timestamp_ms: Current timestamp in milliseconds.
+
+        Returns:
+            PipelineResult containing features, stability, prediction, and model stats.
+        """
         # Extract features
         features = self.feature_extractor.compute(snapshot)
 
@@ -64,8 +89,6 @@ class QuoteWatchRunner:
         model_stats = None
 
         if features is not None and snapshot.mid_price is not None:
-            # Get current timestamp in milliseconds
-            timestamp_ms = time.time() * 1000
             mid_price = float(snapshot.mid_price)
 
             # Get prediction for current features (before adding sample)
@@ -92,7 +115,26 @@ class QuoteWatchRunner:
             # Get model statistics
             model_stats = self.classifier.get_stats()
 
+        return PipelineResult(
+            features=features,
+            stability=stability,
+            prediction_proba=prediction_proba,
+            model_stats=model_stats,
+        )
+
+    def _on_order_book_update(self) -> None:
+        """Callback when order book is updated."""
+        snapshot = self.order_book.get_snapshot()
+        timestamp_ms = time.time() * 1000
+
+        # Run ML pipeline
+        result = self.process_snapshot(snapshot, timestamp_ms)
+
         # Update dashboard state
+        features = result.features
+        stability = result.stability
+        model_stats = result.model_stats
+
         update_shared_state(
             best_bid=float(snapshot.best_bid) if snapshot.best_bid else None,
             best_ask=float(snapshot.best_ask) if snapshot.best_ask else None,
@@ -109,7 +151,7 @@ class QuoteWatchRunner:
             stability_category=stability.category if stability else None,
             stability_color=stability.color if stability else None,
             # ML prediction data
-            prediction_proba=prediction_proba,
+            prediction_proba=result.prediction_proba,
             model_ready=model_stats.is_ready if model_stats else False,
             model_samples_total=model_stats.samples_total if model_stats else 0,
             model_samples_no_change=model_stats.samples_no_change if model_stats else 0,
