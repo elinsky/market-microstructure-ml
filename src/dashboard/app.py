@@ -45,6 +45,127 @@ class OHLCCandle:
     tick_count: int = 1
 
 
+@dataclass
+class PredictionDisplayState:
+    """Display state for the prediction indicator."""
+
+    value: str  # e.g., "75%", "--"
+    label: str  # e.g., "Price Move", "Training...", "Waiting..."
+    subtitle: str  # e.g., "in next 500ms", "100 samples"
+    border_color: str  # Hex color for border
+
+
+def get_prediction_display_state(
+    prediction_proba: float | None,
+    model_ready: bool,
+    model_samples: int,
+    model_ready_pct: float,
+) -> PredictionDisplayState:
+    """Determine the prediction indicator display state.
+
+    Args:
+        prediction_proba: ML prediction probability (0.0 to 1.0), or None.
+        model_ready: Whether the model has enough training data.
+        model_samples: Total number of training samples seen.
+        model_ready_pct: Percentage progress toward ready state (0-100).
+
+    Returns:
+        PredictionDisplayState with value, label, subtitle, and border_color.
+    """
+    if model_ready and prediction_proba is not None:
+        # Model is ready - show prediction percentage
+        pred_pct = prediction_proba * 100
+        value = f"{pred_pct:.0f}%"
+        label = "Price Move"
+        subtitle = "in next 500ms"
+
+        # Color based on probability: low=green, medium=yellow, high=red
+        if pred_pct < 30:
+            border_color = "#28a745"  # Green - low probability
+        elif pred_pct < 60:
+            border_color = "#ffc107"  # Yellow - medium
+        else:
+            border_color = "#dc3545"  # Red - high probability
+    elif model_samples > 0:
+        # Model is training - show progress
+        value = f"{model_ready_pct:.0f}%"
+        label = "Training..."
+        subtitle = f"{model_samples} samples"
+        border_color = "#17a2b8"  # Blue - training
+    else:
+        # No data yet
+        value = "--"
+        label = "Waiting..."
+        subtitle = "Collecting data"
+        border_color = "#444"
+
+    return PredictionDisplayState(
+        value=value,
+        label=label,
+        subtitle=subtitle,
+        border_color=border_color,
+    )
+
+
+@dataclass
+class ImbalanceStyle:
+    """Style for imbalance metric display."""
+
+    color: str  # Text color
+
+
+def get_imbalance_style(imbalance: float | None) -> ImbalanceStyle:
+    """Determine color for imbalance display.
+
+    Args:
+        imbalance: Bid-ask volume imbalance (-1 to 1), or None.
+
+    Returns:
+        ImbalanceStyle with color based on imbalance direction.
+    """
+    if imbalance is not None:
+        if imbalance > 0.1:
+            color = "#28a745"  # Green for buying pressure
+        elif imbalance < -0.1:
+            color = "#dc3545"  # Red for selling pressure
+        else:
+            color = "white"
+    else:
+        color = "white"
+    return ImbalanceStyle(color=color)
+
+
+@dataclass
+class AccuracyDisplayState:
+    """Display state for model accuracy."""
+
+    value: str  # e.g., "75.0%", "--"
+    color: str  # Text color
+
+
+def get_accuracy_display_state(accuracy: float | None) -> AccuracyDisplayState:
+    """Determine accuracy display value and color.
+
+    Args:
+        accuracy: Model accuracy (0.0 to 1.0), or None.
+
+    Returns:
+        AccuracyDisplayState with formatted value and color.
+    """
+    if accuracy is not None:
+        value = f"{accuracy * 100:.1f}%"
+        if accuracy >= 0.6:
+            color = "#28a745"  # Green
+        elif accuracy >= 0.5:
+            color = "#ffc107"  # Yellow
+        else:
+            color = "#dc3545"  # Red
+    else:
+        value = "--"
+        color = "white"
+    return AccuracyDisplayState(value=value, color=color)
+
+
 class CandleAggregator:
     """Aggregates price ticks into OHLC candles.
 
@@ -769,38 +890,16 @@ def create_app() -> Dash:
         }
 
         # ML Prediction indicator
-        prediction_proba = _shared_state["prediction_proba"]
-        model_ready = _shared_state["model_ready"]
-        model_samples = _shared_state["model_samples_total"]
-        model_ready_pct = _shared_state["model_ready_pct"]
-
-        # Determine what to display
-        if model_ready and prediction_proba is not None:
-            # Model is ready - show prediction percentage
-            pred_pct = prediction_proba * 100
-            prediction_value_str = f"{pred_pct:.0f}%"
-            prediction_label_str = "Price Move"
-            subtitle_str = "in next 500ms"
-
-            # Color based on probability: low=green, medium=yellow, high=red
-            if pred_pct < 30:
-                border_color = "#28a745"  # Green - low probability
-            elif pred_pct < 60:
-                border_color = "#ffc107"  # Yellow - medium
-            else:
-                border_color = "#dc3545"  # Red - high probability
-        elif model_samples > 0:
-            # Model is training - show progress
-            prediction_value_str = f"{model_ready_pct:.0f}%"
-            prediction_label_str = "Training..."
-            subtitle_str = f"{model_samples} samples"
-            border_color = "#17a2b8"  # Blue - training
-        else:
-            # No data yet
-            prediction_value_str = "--"
-            prediction_label_str = "Waiting..."
-            subtitle_str = "Collecting data"
-            border_color = "#444"
+        prediction_state = get_prediction_display_state(
+            prediction_proba=_shared_state["prediction_proba"],
+            model_ready=_shared_state["model_ready"],
+            model_samples=_shared_state["model_samples_total"],
+            model_ready_pct=_shared_state["model_ready_pct"],
+        )
+        prediction_value_str = prediction_state.value
+        prediction_label_str = prediction_state.label
+        subtitle_str = prediction_state.subtitle
+        border_color = prediction_state.border_color
 
         # Compute background color from border color
         if border_color != "#444":
@@ -836,14 +935,12 @@ def create_app() -> Dash:
         volatility_str = f"{volatility:.2f} bps" if volatility is not None else "--"
 
         # Color imbalance based on direction
-        imbalance_style = {"fontSize": "18px", "fontWeight": "bold"}
-        if imbalance is not None:
-            if imbalance > 0.1:
-                imbalance_style["color"] = "#28a745"  # Green for buying pressure
-            elif imbalance < -0.1:
-                imbalance_style["color"] = "#dc3545"  # Red for selling pressure
-            else:
-                imbalance_style["color"] = "white"
+        imbalance_style_state = get_imbalance_style(imbalance)
+        imbalance_style = {
+            "fontSize": "18px",
+            "fontWeight": "bold",
+            "color": imbalance_style_state.color,
+        }
 
         # Model Insights
         model_samples_total = _shared_state["model_samples_total"]
@@ -873,23 +970,12 @@ def create_app() -> Dash:
             training_stats_str = "Waiting for data..."
 
         # Accuracy display
-        if model_accuracy is not None:
-            accuracy_str = f"{model_accuracy * 100:.1f}%"
-            # Color based on accuracy
-            if model_accuracy >= 0.6:
-                accuracy_color = "#28a745"  # Green
-            elif model_accuracy >= 0.5:
-                accuracy_color = "#ffc107"  # Yellow
-            else:
-                accuracy_color = "#dc3545"  # Red
-        else:
-            accuracy_str = "--"
-            accuracy_color = "white"
-
+        accuracy_state = get_accuracy_display_state(model_accuracy)
+        accuracy_str = accuracy_state.value
         accuracy_style = {
             "fontSize": "24px",
             "fontWeight": "bold",
-            "color": accuracy_color,
+            "color": accuracy_state.color,
         }
 
         # Feature weights chart
