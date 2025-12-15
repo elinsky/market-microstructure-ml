@@ -40,7 +40,8 @@ Internal modules and their responsibilities.
 src/
 ├── ingest/
 │   ├── websocket_client.py   # Coinbase WS connection, reconnection logic
-│   └── order_book.py         # Thread-safe order book cache (top-10 levels)
+│   ├── order_book.py         # Thread-safe order book cache (top-10 levels)
+│   └── trade_buffer.py       # Thread-safe buffer for recent trades (matches channel)
 │
 ├── features/
 │   ├── extractor.py          # Computes spread_bps, imbalance, depth, volatility
