@@ -56,72 +56,71 @@ Basically: **streaming data -> features -> predictions -> trading decisions -> d
 
 ### Data
 
-| Want | Why |
-|------|-----|
-| More depth (10-20 levels, not 3) | Better features, more signal |
-| Trade data (matches channel) | Trade flow imbalance, aggressor detection |
-| Save data to disk (Parquet or DB) | Backtesting, retraining |
-| Replay historical data | Test models on past data |
-| Multi-symbol (BTC + ETH) | Shows it's not hardcoded |
+| Want | Why | Epic |
+|------|-----|------|
+| More depth (10-20 levels, not 3) | Better features, more signal | [#35](https://github.com/elinsky/market-microstructure-ml/issues/35) |
+| Trade data (matches channel) | Trade flow imbalance, aggressor detection | [#35](https://github.com/elinsky/market-microstructure-ml/issues/35) |
+| Save data to disk (Parquet or DB) | Backtesting, retraining | [#35](https://github.com/elinsky/market-microstructure-ml/issues/35) |
+| Replay historical data | Test models on past data | [#35](https://github.com/elinsky/market-microstructure-ml/issues/35) |
+| Multi-symbol (BTC + ETH) | Shows it's not hardcoded | - |
 
 ### Features
 
-| Want | Why |
-|------|-----|
-| Keep current 4 | They work |
-| Add lag features (t-1, t-5, t-10) | Temporal patterns |
-| Trade flow features | Volume imbalance tells you something |
-| Raw LOB as tensor | Feed to Transformer directly |
-| Feature store | Don't recompute everything every time |
+| Want | Why | Epic |
+|------|-----|------|
+| Keep current 4 | They work | done |
+| Add lag features (t-1, t-5, t-10) | Temporal patterns | - |
+| Trade flow features | Volume imbalance tells you something | - |
+| Raw LOB as tensor | Feed to Transformer directly | - |
 
 ### Prediction Models
 
-| Want | Why |
-|------|-----|
-| Keep SGD as baseline | Simple, online, something to compare against |
-| Add Transformer | Deep learning checkbox, modern architecture |
-| Multiple horizons (100ms, 500ms, 1s) | More interesting prediction task |
-| Model registry (MLflow or whatever) | Version models, track experiments |
-| Batch retraining pipeline | Not just online learning |
+| Want | Why | Epic |
+|------|-----|------|
+| Keep SGD as baseline | Simple, online, something to compare against | done |
+| Add Transformer | Deep learning checkbox, modern architecture | - |
+| Multiple horizons (100ms, 500ms, 1s) | More interesting prediction task | - |
+| Model registry (MLflow or whatever) | Version models, track experiments | - |
+| Batch retraining pipeline | Not just online learning | - |
 
 ### RL Agent
 
-| Want | Why |
-|------|-----|
-| Market simulator | Replay data, simulate fills |
-| Realistic costs | Slippage, fees, market impact |
-| State = market features + predictions + position | Everything the agent needs |
-| Actions = buy/sell/hold | Start simple |
-| Reward = PnL - costs - inventory penalty | Standard setup |
-| PPO or SAC | Modern, stable algorithms |
-| Benchmark against TWAP, buy-and-hold | Need something to compare to |
+| Want | Why | Epic |
+|------|-----|------|
+| Market simulator | Replay data, simulate fills | - |
+| Realistic costs | Slippage, fees, market impact | - |
+| State = market features + predictions + position | Everything the agent needs | - |
+| Actions = buy/sell/hold | Start simple | - |
+| Reward = PnL - costs - inventory penalty | Standard setup | - |
+| PPO or SAC | Modern, stable algorithms | - |
+| Benchmark against TWAP, buy-and-hold | Need something to compare to | - |
 
 ### Evaluation
 
-| Want | Why |
-|------|-----|
-| Walk-forward backtesting | Proper out-of-sample testing |
-| Prediction metrics: AUC, Brier, calibration | Not just accuracy |
-| Trading metrics: Sharpe, drawdown | Standard quant metrics |
-| Feature importance (SHAP) | Explain what's driving predictions |
+| Want | Why | Epic |
+|------|-----|------|
+| Walk-forward backtesting | Proper out-of-sample testing | - |
+| Prediction metrics: AUC, Brier, calibration | Not just accuracy | - |
+| Trading metrics: Sharpe, drawdown | Standard quant metrics | - |
+| Feature importance (SHAP) | Explain what's driving predictions | - |
 
 ### Dashboard
 
-| Want | Why |
-|------|-----|
-| Keep current views | They're fine |
-| Add model comparison (SGD vs Transformer) | Show the difference |
-| Add RL view (equity curve, position, actions) | See the agent work |
-| Backtest results | Show historical performance |
+| Want | Why | Epic |
+|------|-----|------|
+| Keep current views | They're fine | done |
+| Add model comparison (SGD vs Transformer) | Show the difference | - |
+| Add RL view (equity curve, position, actions) | See the agent work | - |
+| Backtest results | Show historical performance | - |
 
 ### Infrastructure
 
-| Want | Why |
-|------|-----|
-| Keep Cloud Run | It works |
-| Add model registry | Track versions |
-| Add retraining job | Keep model fresh |
-| More tests | Confidence in changes |
+| Want | Why | Epic |
+|------|-----|------|
+| Keep Cloud Run | It works | done |
+| Add model registry | Track versions | - |
+| Add retraining job | Keep model fresh | - |
+| More tests | Confidence in changes | [#35](https://github.com/elinsky/market-microstructure-ml/issues/35) |
 
 ---
 
