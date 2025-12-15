@@ -87,13 +87,16 @@ class CoinbaseWebSocketClient:
             async for message in ws:
                 if isinstance(message, bytes):
                     message = message.decode("utf-8")
-                await self._handle_message(message)
+                self.process_message(message)
 
-    async def _handle_message(self, message: str) -> None:
-        """Handle incoming WebSocket message.
+    def process_message(self, message: str) -> None:
+        """Process a raw JSON message from Coinbase.
+
+        Parses the message and updates the order book accordingly.
+        Handles snapshot, l2update, subscriptions, and error messages.
 
         Args:
-            message: Raw JSON message from Coinbase.
+            message: Raw JSON message string from Coinbase WebSocket.
         """
         try:
             data = json.loads(message)
