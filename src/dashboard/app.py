@@ -45,12 +45,81 @@ class OHLCCandle:
     tick_count: int = 1
 
 
-# OHLC candle history (each candle = 10 ticks)
-TICKS_PER_CANDLE = 10
-MAX_CANDLES = 50
-_candle_history: deque[OHLCCandle] = deque(maxlen=MAX_CANDLES)
-_current_candle: OHLCCandle | None = None
-_tick_count: int = 0
+class CandleAggregator:
+    """Aggregates price ticks into OHLC candles.
+
+    Each candle represents a fixed number of ticks. When the tick count
+    reaches ticks_per_candle, the current candle is closed and added to history.
+    """
+
+    def __init__(self, ticks_per_candle: int = 10, max_candles: int = 50):
+        """Initialize the candle aggregator.
+
+        Args:
+            ticks_per_candle: Number of ticks per candle before closing.
+            max_candles: Maximum number of candles to keep in history.
+        """
+        self.ticks_per_candle = ticks_per_candle
+        self.max_candles = max_candles
+        self._history: deque[OHLCCandle] = deque(maxlen=max_candles)
+        self._current_candle: OHLCCandle | None = None
+        self._tick_count: int = 0
+
+    def add_tick(self, price: float) -> None:
+        """Add a price tick, updating the current candle.
+
+        Args:
+            price: The price to add.
+        """
+        if self._current_candle is None:
+            # Start new candle
+            self._current_candle = OHLCCandle(
+                open=price, high=price, low=price, close=price
+            )
+            self._tick_count = 1
+        else:
+            # Update current candle
+            self._current_candle.high = max(self._current_candle.high, price)
+            self._current_candle.low = min(self._current_candle.low, price)
+            self._current_candle.close = price
+            self._current_candle.tick_count += 1
+            self._tick_count += 1
+
+        # Close candle after ticks_per_candle ticks
+        if self._tick_count >= self.ticks_per_candle:
+            self._history.append(self._current_candle)
+            self._current_candle = None
+            self._tick_count = 0
+
+    def get_candles(self) -> list[OHLCCandle]:
+        """Get all candles including the current in-progress candle.
+
+        Returns:
+            List of candles, with current candle (if any) at the end.
+        """
+        candles = list(self._history)
+        if self._current_candle is not None:
+            candles.append(self._current_candle)
+        return candles
+
+    @property
+    def current_candle(self) -> OHLCCandle | None:
+        """Get the current in-progress candle."""
+        return self._current_candle
+
+    @property
+    def history(self) -> list[OHLCCandle]:
+        """Get completed candle history (excludes current candle)."""
+        return list(self._history)
+
+    @property
+    def tick_count(self) -> int:
+        """Get the current tick count within the current candle."""
+        return self._tick_count
+
+
+# Global candle aggregator instance
+_candle_aggregator = CandleAggregator(ticks_per_candle=10, max_candles=50)
 
 
 def update_shared_state(
@@ -125,30 +194,7 @@ def update_shared_state(
 
     # Build OHLC candles from mid prices
     if mid_price is not None:
-        _update_candles(mid_price)
-
-
-def _update_candles(price: float) -> None:
-    """Update OHLC candle history with new price tick."""
-    global _current_candle, _tick_count
-
-    if _current_candle is None:
-        # Start new candle
-        _current_candle = OHLCCandle(open=price, high=price, low=price, close=price)
-        _tick_count = 1
-    else:
-        # Update current candle
-        _current_candle.high = max(_current_candle.high, price)
-        _current_candle.low = min(_current_candle.low, price)
-        _current_candle.close = price
-        _current_candle.tick_count += 1
-        _tick_count += 1
-
-    # Close candle after TICKS_PER_CANDLE ticks
-    if _tick_count >= TICKS_PER_CANDLE:
-        _candle_history.append(_current_candle)
-        _current_candle = None
-        _tick_count = 0
+        _candle_aggregator.add_tick(mid_price)
 
 
 def create_app() -> Dash:
@@ -666,10 +712,7 @@ def create_app() -> Dash:
         ts_str = f"Last update: {ts}" if ts else "Waiting for data..."
 
         # Build OHLC candlestick chart
-        candles = list(_candle_history)
-        # Include current in-progress candle if exists
-        if _current_candle is not None:
-            candles = candles + [_current_candle]
+        candles = _candle_aggregator.get_candles()
 
         opens: list[float] = []
         highs: list[float] = []
