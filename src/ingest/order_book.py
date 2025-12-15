@@ -3,20 +3,19 @@
 import threading
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Dict, List, Optional, Tuple
 
 
 @dataclass
 class OrderBookSnapshot:
     """Snapshot of current order book state."""
 
-    best_bid: Optional[Decimal]
-    best_ask: Optional[Decimal]
-    mid_price: Optional[Decimal]
-    spread: Optional[Decimal]
-    bids: List[Tuple[Decimal, Decimal]]  # [(price, size), ...]
-    asks: List[Tuple[Decimal, Decimal]]  # [(price, size), ...]
-    timestamp: Optional[str] = None
+    best_bid: Decimal | None
+    best_ask: Decimal | None
+    mid_price: Decimal | None
+    spread: Decimal | None
+    bids: list[tuple[Decimal, Decimal]]  # [(price, size), ...]
+    asks: list[tuple[Decimal, Decimal]]  # [(price, size), ...]
+    timestamp: str | None = None
 
 
 class OrderBook:
@@ -32,12 +31,12 @@ class OrderBook:
             depth: Number of price levels to maintain on each side.
         """
         self.depth = depth
-        self._bids: Dict[Decimal, Decimal] = {}  # price -> size
-        self._asks: Dict[Decimal, Decimal] = {}  # price -> size
+        self._bids: dict[Decimal, Decimal] = {}  # price -> size
+        self._asks: dict[Decimal, Decimal] = {}  # price -> size
         self._lock = threading.RLock()
-        self._last_timestamp: Optional[str] = None
+        self._last_timestamp: str | None = None
 
-    def apply_snapshot(self, bids: List[List[str]], asks: List[List[str]]) -> None:
+    def apply_snapshot(self, bids: list[list[str]], asks: list[list[str]]) -> None:
         """Apply full order book snapshot.
 
         Args:
@@ -61,7 +60,7 @@ class OrderBook:
                     self._asks[price] = size
 
     def apply_update(
-        self, changes: List[List[str]], timestamp: Optional[str] = None
+        self, changes: list[list[str]], timestamp: str | None = None
     ) -> None:
         """Apply incremental L2 update.
 

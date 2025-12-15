@@ -2,12 +2,12 @@
 
 from collections import deque
 from dataclasses import dataclass
-from typing import Any, Deque, Dict, Optional
+from typing import Any
 
 from dash import Dash, Input, Output, dcc, html
 
 # Shared state updated by the WebSocket client
-_shared_state: Dict[str, Any] = {
+_shared_state: dict[str, Any] = {
     "best_bid": None,
     "best_ask": None,
     "mid_price": None,
@@ -48,33 +48,33 @@ class OHLCCandle:
 # OHLC candle history (each candle = 10 ticks)
 TICKS_PER_CANDLE = 10
 MAX_CANDLES = 50
-_candle_history: Deque[OHLCCandle] = deque(maxlen=MAX_CANDLES)
-_current_candle: Optional[OHLCCandle] = None
+_candle_history: deque[OHLCCandle] = deque(maxlen=MAX_CANDLES)
+_current_candle: OHLCCandle | None = None
 _tick_count: int = 0
 
 
 def update_shared_state(
-    best_bid: Optional[float],
-    best_ask: Optional[float],
-    mid_price: Optional[float],
-    spread: Optional[float],
-    timestamp: Optional[str],
-    spread_bps: Optional[float] = None,
-    imbalance: Optional[float] = None,
-    depth: Optional[float] = None,
-    volatility: Optional[float] = None,
-    stability_score: Optional[float] = None,
-    stability_category: Optional[str] = None,
-    stability_color: Optional[str] = None,
+    best_bid: float | None,
+    best_ask: float | None,
+    mid_price: float | None,
+    spread: float | None,
+    timestamp: str | None,
+    spread_bps: float | None = None,
+    imbalance: float | None = None,
+    depth: float | None = None,
+    volatility: float | None = None,
+    stability_score: float | None = None,
+    stability_category: str | None = None,
+    stability_color: str | None = None,
     # ML prediction fields
-    prediction_proba: Optional[float] = None,
+    prediction_proba: float | None = None,
     model_ready: bool = False,
     model_samples_total: int = 0,
     model_samples_no_change: int = 0,
     model_samples_change: int = 0,
     model_ready_pct: float = 0.0,
-    model_accuracy: Optional[float] = None,
-    model_weights: Optional[Dict[str, float]] = None,
+    model_accuracy: float | None = None,
+    model_weights: dict[str, float] | None = None,
 ) -> None:
     """Update shared state from WebSocket client.
 
@@ -165,7 +165,7 @@ def create_app() -> Dash:
         return "OK", 200
 
     # Mobile-responsive CSS
-    app.index_string = '''
+    app.index_string = """
 <!DOCTYPE html>
 <html>
     <head>
@@ -221,7 +221,7 @@ def create_app() -> Dash:
         </footer>
     </body>
 </html>
-'''
+"""
 
     app.layout = html.Div(
         [
@@ -292,12 +292,16 @@ def create_app() -> Dash:
                             html.Div(
                                 [
                                     html.Div(
-                                        "Spread", style={"fontSize": "12px", "color": "#888"}
+                                        "Spread",
+                                        style={"fontSize": "12px", "color": "#888"},
                                     ),
                                     html.Div(
                                         id="metric-spread",
                                         children="--",
-                                        style={"fontSize": "18px", "fontWeight": "bold"},
+                                        style={
+                                            "fontSize": "18px",
+                                            "fontWeight": "bold",
+                                        },
                                     ),
                                 ],
                                 style={"flex": "1", "textAlign": "center"},
@@ -311,7 +315,10 @@ def create_app() -> Dash:
                                     html.Div(
                                         id="metric-imbalance",
                                         children="--",
-                                        style={"fontSize": "18px", "fontWeight": "bold"},
+                                        style={
+                                            "fontSize": "18px",
+                                            "fontWeight": "bold",
+                                        },
                                     ),
                                 ],
                                 style={"flex": "1", "textAlign": "center"},
@@ -319,12 +326,16 @@ def create_app() -> Dash:
                             html.Div(
                                 [
                                     html.Div(
-                                        "Depth", style={"fontSize": "12px", "color": "#888"}
+                                        "Depth",
+                                        style={"fontSize": "12px", "color": "#888"},
                                     ),
                                     html.Div(
                                         id="metric-depth",
                                         children="--",
-                                        style={"fontSize": "18px", "fontWeight": "bold"},
+                                        style={
+                                            "fontSize": "18px",
+                                            "fontWeight": "bold",
+                                        },
                                     ),
                                 ],
                                 style={"flex": "1", "textAlign": "center"},
@@ -338,7 +349,10 @@ def create_app() -> Dash:
                                     html.Div(
                                         id="metric-volatility",
                                         children="--",
-                                        style={"fontSize": "18px", "fontWeight": "bold"},
+                                        style={
+                                            "fontSize": "18px",
+                                            "fontWeight": "bold",
+                                        },
                                     ),
                                 ],
                                 style={"flex": "1", "textAlign": "center"},
@@ -360,8 +374,19 @@ def create_app() -> Dash:
                 [
                     html.Div(
                         [
-                            html.H3("Best Bid", style={"color": "#28a745", "fontSize": "1rem", "margin": "0 0 5px 0"}),
-                            html.H2(id="bid-price", children="--", style={"margin": "0", "fontSize": "1.3rem"}),
+                            html.H3(
+                                "Best Bid",
+                                style={
+                                    "color": "#28a745",
+                                    "fontSize": "1rem",
+                                    "margin": "0 0 5px 0",
+                                },
+                            ),
+                            html.H2(
+                                id="bid-price",
+                                children="--",
+                                style={"margin": "0", "fontSize": "1.3rem"},
+                            ),
                         ],
                         style={
                             "flex": "1",
@@ -375,8 +400,19 @@ def create_app() -> Dash:
                     ),
                     html.Div(
                         [
-                            html.H3("Mid Price", style={"color": "#ffc107", "fontSize": "1rem", "margin": "0 0 5px 0"}),
-                            html.H2(id="mid-price", children="--", style={"margin": "0", "fontSize": "1.3rem"}),
+                            html.H3(
+                                "Mid Price",
+                                style={
+                                    "color": "#ffc107",
+                                    "fontSize": "1rem",
+                                    "margin": "0 0 5px 0",
+                                },
+                            ),
+                            html.H2(
+                                id="mid-price",
+                                children="--",
+                                style={"margin": "0", "fontSize": "1.3rem"},
+                            ),
                         ],
                         style={
                             "flex": "1",
@@ -390,8 +426,19 @@ def create_app() -> Dash:
                     ),
                     html.Div(
                         [
-                            html.H3("Best Ask", style={"color": "#dc3545", "fontSize": "1rem", "margin": "0 0 5px 0"}),
-                            html.H2(id="ask-price", children="--", style={"margin": "0", "fontSize": "1.3rem"}),
+                            html.H3(
+                                "Best Ask",
+                                style={
+                                    "color": "#dc3545",
+                                    "fontSize": "1rem",
+                                    "margin": "0 0 5px 0",
+                                },
+                            ),
+                            html.H2(
+                                id="ask-price",
+                                children="--",
+                                style={"margin": "0", "fontSize": "1.3rem"},
+                            ),
                         ],
                         style={
                             "flex": "1",
@@ -405,7 +452,12 @@ def create_app() -> Dash:
                     ),
                 ],
                 className="price-cards",
-                style={"display": "flex", "justifyContent": "center", "flexWrap": "wrap", "margin": "0 5px"},
+                style={
+                    "display": "flex",
+                    "justifyContent": "center",
+                    "flexWrap": "wrap",
+                    "margin": "0 5px",
+                },
             ),
             # Spread display
             html.Div(
@@ -425,7 +477,10 @@ def create_app() -> Dash:
             # Price history candlestick chart
             html.Div(
                 [
-                    html.H4("Price History (OHLC)", style={"margin": "0 0 10px 0", "fontSize": "0.9rem"}),
+                    html.H4(
+                        "Price History (OHLC)",
+                        style={"margin": "0 0 10px 0", "fontSize": "0.9rem"},
+                    ),
                     dcc.Graph(
                         id="price-chart",
                         config={"displayModeBar": False},
@@ -531,7 +586,11 @@ def create_app() -> Dash:
                                         style={"height": "80px"},
                                     ),
                                 ],
-                                style={"flex": "2", "padding": "0 15px", "minWidth": "200px"},
+                                style={
+                                    "flex": "2",
+                                    "padding": "0 15px",
+                                    "minWidth": "200px",
+                                },
                             ),
                         ],
                         className="model-insights-row",
@@ -698,7 +757,10 @@ def create_app() -> Dash:
 
         # Compute background color from border color
         if border_color != "#444":
-            bg_color = f"rgba({int(border_color[1:3], 16)}, {int(border_color[3:5], 16)}, {int(border_color[5:7], 16)}, 0.2)"
+            r = int(border_color[1:3], 16)
+            g = int(border_color[3:5], 16)
+            b = int(border_color[5:7], 16)
+            bg_color = f"rgba({r}, {g}, {b}, 0.2)"
         else:
             bg_color = "#333"
 

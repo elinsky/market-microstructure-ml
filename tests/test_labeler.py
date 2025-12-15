@@ -1,7 +1,5 @@
 """Tests for Labeler."""
 
-import pytest
-
 from src.features.extractor import FeatureSnapshot
 from src.features.labeler import Labeler
 

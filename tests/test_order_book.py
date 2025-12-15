@@ -2,8 +2,6 @@
 
 from decimal import Decimal
 
-import pytest
-
 from src.ingest.order_book import OrderBook
 
 

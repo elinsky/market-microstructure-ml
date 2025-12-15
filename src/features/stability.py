@@ -1,7 +1,6 @@
 """Quote stability scoring algorithm."""
 
 from dataclasses import dataclass
-from typing import Tuple
 
 from src.features.extractor import FeatureSnapshot
 
@@ -123,7 +122,7 @@ class StabilityScorer:
         # Linear interpolation
         return 100.0 * (high - value) / (high - low)
 
-    def _categorize(self, score: float) -> Tuple[str, str]:
+    def _categorize(self, score: float) -> tuple[str, str]:
         """Determine category and color from score.
 
         Args:

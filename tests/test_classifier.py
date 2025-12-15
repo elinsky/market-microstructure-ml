@@ -1,7 +1,5 @@
 """Tests for OnlineClassifier."""
 
-import pytest
-
 from src.features.extractor import FeatureSnapshot
 from src.model.classifier import OnlineClassifier
 

@@ -7,7 +7,6 @@ import signal
 import sys
 import threading
 import time
-from typing import Optional
 
 from src.dashboard.app import create_app, update_shared_state
 from src.features import FeatureExtractor, Labeler, StabilityScorer
@@ -45,8 +44,8 @@ class QuoteWatchRunner:
             symbol=symbol,
             on_update=self._on_order_book_update,
         )
-        self._loop: Optional[asyncio.AbstractEventLoop] = None
-        self._thread: Optional[threading.Thread] = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._thread: threading.Thread | None = None
 
     def _on_order_book_update(self) -> None:
         """Callback when order book is updated."""
@@ -80,7 +79,9 @@ class QuoteWatchRunner:
 
             # If we got a labeled sample, train the model and record accuracy
             if labeled_sample is not None:
-                self.classifier.partial_fit(labeled_sample.features, labeled_sample.label)
+                self.classifier.partial_fit(
+                    labeled_sample.features, labeled_sample.label
+                )
 
                 # Record prediction accuracy if we had a prediction at time t
                 if labeled_sample.prediction_at_t is not None:
@@ -150,7 +151,7 @@ dash_app = create_app()
 server = dash_app.server
 
 # Global runner instance
-_runner: Optional[QuoteWatchRunner] = None
+_runner: QuoteWatchRunner | None = None
 
 
 def start_websocket_client() -> None:

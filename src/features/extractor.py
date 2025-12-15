@@ -4,7 +4,6 @@ import threading
 from collections import deque
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Deque, Optional
 
 from src.ingest.order_book import OrderBookSnapshot
 
@@ -17,7 +16,7 @@ class FeatureSnapshot:
     imbalance: float  # Bid-ask volume imbalance (-1 to 1)
     depth: float  # Total volume at top levels (in base currency)
     volatility: float  # Rolling std of mid-price changes (in bps)
-    timestamp: Optional[str] = None
+    timestamp: str | None = None
 
 
 class FeatureExtractor:
@@ -33,10 +32,10 @@ class FeatureExtractor:
             volatility_window: Number of ticks to use for volatility calculation.
         """
         self._volatility_window = volatility_window
-        self._mid_prices: Deque[Decimal] = deque(maxlen=volatility_window)
+        self._mid_prices: deque[Decimal] = deque(maxlen=volatility_window)
         self._lock = threading.RLock()
 
-    def compute(self, snapshot: OrderBookSnapshot) -> Optional[FeatureSnapshot]:
+    def compute(self, snapshot: OrderBookSnapshot) -> FeatureSnapshot | None:
         """Compute features from an order book snapshot.
 
         Args:

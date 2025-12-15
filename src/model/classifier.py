@@ -3,7 +3,6 @@
 import threading
 from collections import deque
 from dataclasses import dataclass
-from typing import Deque, Dict, List, Optional, Tuple
 
 import numpy as np
 from sklearn.linear_model import SGDClassifier
@@ -21,8 +20,8 @@ class ModelStats:
     samples_change: int  # Class 1
     is_ready: bool
     ready_pct: float  # 0-100, percentage to ready state
-    accuracy_recent: Optional[float]  # Accuracy over last N predictions
-    weights: Dict[str, float]  # Feature name -> coefficient
+    accuracy_recent: float | None  # Accuracy over last N predictions
+    weights: dict[str, float]  # Feature name -> coefficient
 
 
 class OnlineClassifier:
@@ -66,9 +65,7 @@ class OnlineClassifier:
 
         # Accuracy tracking: stores (prediction, actual) tuples
         self._accuracy_window = accuracy_window
-        self._prediction_history: Deque[Tuple[int, int]] = deque(
-            maxlen=accuracy_window
-        )
+        self._prediction_history: deque[tuple[int, int]] = deque(maxlen=accuracy_window)
 
         self._lock = threading.RLock()
 
@@ -91,9 +88,7 @@ class OnlineClassifier:
         """Get current model statistics."""
         with self._lock:
             # Calculate ready percentage
-            min_per_class = min(
-                self._samples_by_class[0], self._samples_by_class[1]
-            )
+            min_per_class = min(self._samples_by_class[0], self._samples_by_class[1])
             ready_pct = min(100.0, (min_per_class / self.MIN_SAMPLES_PER_CLASS) * 100)
 
             # Calculate recent accuracy
@@ -128,12 +123,14 @@ class OnlineClassifier:
 
     def _features_to_array(self, features: FeatureSnapshot) -> np.ndarray:
         """Convert FeatureSnapshot to numpy array."""
-        return np.array([
-            features.spread_bps,
-            features.imbalance,
-            features.depth,
-            features.volatility,
-        ]).reshape(1, -1)
+        return np.array(
+            [
+                features.spread_bps,
+                features.imbalance,
+                features.depth,
+                features.volatility,
+            ]
+        ).reshape(1, -1)
 
     def partial_fit(self, features: FeatureSnapshot, label: int) -> None:
         """Update model with a single training sample.

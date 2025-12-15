@@ -3,7 +3,7 @@
 import asyncio
 import json
 import logging
-from typing import Callable, Optional
+from collections.abc import Callable
 
 import websockets
 from websockets.exceptions import ConnectionClosed
@@ -26,7 +26,7 @@ class CoinbaseWebSocketClient:
         self,
         order_book: OrderBook,
         symbol: str = "BTC-USD",
-        on_update: Optional[Callable[[], None]] = None,
+        on_update: Callable[[], None] | None = None,
     ):
         """Initialize WebSocket client.
 
@@ -39,7 +39,7 @@ class CoinbaseWebSocketClient:
         self.symbol = symbol
         self.on_update = on_update
         self._running = False
-        self._ws: Optional[websockets.WebSocketClientProtocol] = None
+        self._ws: websockets.WebSocketClientProtocol | None = None
 
     async def start(self) -> None:
         """Start the WebSocket client with reconnection logic."""
@@ -70,9 +70,7 @@ class CoinbaseWebSocketClient:
     async def _connect_and_run(self) -> None:
         """Connect to WebSocket and process messages."""
         # Coinbase L2 snapshots can be large (~1-2MB), increase limit
-        async with websockets.connect(
-            COINBASE_WS_URL, max_size=10 * 1024 * 1024
-        ) as ws:
+        async with websockets.connect(COINBASE_WS_URL, max_size=10 * 1024 * 1024) as ws:
             self._ws = ws
             logger.info(f"Connected to {COINBASE_WS_URL}")
 

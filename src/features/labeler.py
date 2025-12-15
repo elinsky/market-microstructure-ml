@@ -3,7 +3,6 @@
 import threading
 from collections import deque
 from dataclasses import dataclass
-from typing import Deque, Optional, Tuple
 
 from src.features.extractor import FeatureSnapshot
 
@@ -17,7 +16,7 @@ class LabeledSample:
     mid_price_t: float  # Price at time t
     mid_price_t_delta: float  # Price at time t + delta
     price_change_pct: float  # Percentage change
-    prediction_at_t: Optional[int] = None  # Prediction made at time t (for accuracy)
+    prediction_at_t: int | None = None  # Prediction made at time t (for accuracy)
 
 
 class Labeler:
@@ -50,7 +49,7 @@ class Labeler:
         self._max_buffer_size = max_buffer_size
 
         # Buffer stores (timestamp_ms, mid_price, features, prediction)
-        self._buffer: Deque[Tuple[float, float, FeatureSnapshot, Optional[int]]] = deque(
+        self._buffer: deque[tuple[float, float, FeatureSnapshot, int | None]] = deque(
             maxlen=max_buffer_size
         )
         self._lock = threading.RLock()
@@ -76,8 +75,8 @@ class Labeler:
         timestamp_ms: float,
         mid_price: float,
         features: FeatureSnapshot,
-        prediction: Optional[int] = None,
-    ) -> Optional[LabeledSample]:
+        prediction: int | None = None,
+    ) -> LabeledSample | None:
         """Add a new sample and return a labeled sample if one is ready.
 
         Args:
@@ -100,7 +99,7 @@ class Labeler:
         self,
         current_timestamp_ms: float,
         current_mid_price: float,
-    ) -> Optional[LabeledSample]:
+    ) -> LabeledSample | None:
         """Check if oldest sample is ready and emit label if so.
 
         Args:

@@ -435,15 +435,44 @@ catalog = load_catalog(
 
 ## 9. Implementation Order
 
-1. Add `matches` channel + `TradeBuffer`
-2. Increase order book depth to 10
-3. Set up Iceberg catalog + table schemas (local first)
-4. Implement `DataWriter` with batched writes
-5. Wire writer into runner
-6. Implement `DataReader` for replay
-7. Add GCS backend for prod
-8. Tests
-9. Update docs
+**Note: We use TDD. Write tests first for each component.**
+
+```
+1. CI/CD foundation (GitHub Actions, pre-commit, branch protection)
+2. Get test coverage to 90%+
+3. Set up Iceberg catalog + table schemas (all 4 tables)
+4. Increase order book depth to 10
+5. Add matches channel + TradeBuffer
+6. Implement DataWriter (raw_orderbook + raw_trades)
+7. Implement DataWriter (features + predictions)
+8. Wire writer into runner
+9. Implement DataReader
+10. Add GCS backend for prod
+11. Update docs
+```
+
+### Rationale
+
+| Step | Risk Mitigated | Value Delivered |
+|------|----------------|-----------------|
+| 1 | Broken code merging to main | Automated quality gates |
+| 2 | Regressions, untested code paths | Confidence to refactor |
+| 3 | Schema design issues caught early | Test fixtures, data model locked |
+| 4-5 | Low risk changes | Richer data available for features |
+| 6-7 | Writer bugs | Can persist all data types |
+| 8 | Integration issues | Live data collection working |
+| 9 | Reader bugs | Replay capability for backtesting |
+| 10 | Cloud config issues | Production ready |
+
+**Why CI/CD first?**
+- Ensures all new code is automatically linted and tested
+- Branch protection prevents merging broken code
+- Coverage tracking keeps quality high as we add features
+
+**Why schemas before implementation?**
+- PyIceberg has quirks - validate catalog setup before building components that depend on it
+- If schema is wrong (missing fields, wrong types), better to find out before implementing 5 components
+- Enables writing integration tests against real schemas before implementing the writer
 
 ---
 
