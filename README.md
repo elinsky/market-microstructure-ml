@@ -37,12 +37,19 @@ open http://localhost:8050
 # Install with dev dependencies
 pip install -e ".[dev]"
 
+# Start Postgres for Iceberg catalog (requires Docker)
+docker compose up -d
+
+# Set environment variables for local development
+export ICEBERG_CATALOG_URI="postgresql+psycopg2://postgres:localdev@localhost:5433/iceberg"
+export ICEBERG_WAREHOUSE="file://data/warehouse"
+
 # Linting/formatting
 black .
 ruff check .
 mypy src/
 
-# Tests
+# Tests (requires Postgres running)
 pytest -v
 ```
 
@@ -53,6 +60,7 @@ src/
   ingest/       # WebSocket client + order book cache
   features/     # Feature extraction + labeling
   model/        # OnlineClassifier (SGDClassifier)
+  storage/      # Iceberg catalog + table schemas
   dashboard/    # Plotly Dash app
 docs/           # Architecture, requirements, design docs
 ```
