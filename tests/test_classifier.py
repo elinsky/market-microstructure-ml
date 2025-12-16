@@ -1,7 +1,7 @@
-"""Tests for OnlineClassifier."""
+"""Tests for OnlineClassifier and Prediction dataclass."""
 
 from src.features.extractor import FeatureSnapshot
-from src.model.classifier import OnlineClassifier
+from src.model.classifier import OnlineClassifier, Prediction
 
 
 class TestOnlineClassifier:
@@ -217,3 +217,44 @@ class TestOnlineClassifier:
 
         # THEN ready_pct is 50%
         assert stats.ready_pct == 50.0
+
+
+class TestPrediction:
+    """Tests for Prediction dataclass."""
+
+    def test_prediction_has_required_fields(self):
+        """Prediction dataclass has all required fields."""
+        # GIVEN prediction data
+        # WHEN we create a Prediction
+        pred = Prediction(
+            timestamp_ms=1704067200000,
+            prediction=1,
+            probability=0.75,
+            label=1,
+            labeled_at_ms=1704067200500,
+        )
+
+        # THEN all fields are accessible
+        assert pred.timestamp_ms == 1704067200000
+        assert pred.prediction == 1
+        assert pred.probability == 0.75
+        assert pred.label == 1
+        assert pred.labeled_at_ms == 1704067200500
+
+    def test_prediction_is_dataclass(self):
+        """Prediction is a proper dataclass."""
+        # GIVEN a Prediction
+        pred = Prediction(
+            timestamp_ms=1704067200000,
+            prediction=0,
+            probability=0.3,
+            label=0,
+            labeled_at_ms=1704067200500,
+        )
+
+        # WHEN we check it's a dataclass (no action)
+
+        # THEN it's an instance of the dataclass
+        from dataclasses import is_dataclass
+
+        assert is_dataclass(pred)

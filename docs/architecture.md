@@ -52,6 +52,7 @@ src/
 │   └── classifier.py         # OnlineClassifier: SGDClassifier + StandardScaler
 │                              # - partial_fit() for online learning
 │                              # - record_prediction() for accuracy tracking
+│                              # - Prediction dataclass for labeled predictions
 │
 ├── storage/
 │   ├── catalog.py            # Iceberg catalog factory (Postgres-backed)

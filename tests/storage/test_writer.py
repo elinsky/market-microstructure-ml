@@ -12,8 +12,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from src.features.extractor import FeatureSnapshot
 from src.ingest.order_book import OrderBookSnapshot
 from src.ingest.trade_buffer import Trade
+from src.model.classifier import Prediction
 from src.storage.writer import DataWriter
 
 
@@ -409,6 +411,233 @@ class TestThreadSafety:
         assert len(writer._trades_buffer) == write_count
 
 
+class TestWriteFeatures:
+    """Tests for write_features method."""
+
+    def _make_features(
+        self,
+        timestamp_ms: int = 1704110400000,
+        spread_bps: float = 10.5,
+        imbalance: float = 0.25,
+        depth: float = 5.0,
+        volatility: float = 1.2,
+    ) -> FeatureSnapshot:
+        """Create a test FeatureSnapshot."""
+        return FeatureSnapshot(
+            spread_bps=spread_bps,
+            imbalance=imbalance,
+            depth=depth,
+            volatility=volatility,
+            timestamp="2024-01-01T12:00:00Z",
+            timestamp_ms=timestamp_ms,
+        )
+
+    def test_write_features_adds_to_buffer(self):
+        """write_features adds features to buffer."""
+        # GIVEN a DataWriter
+        catalog = MagicMock()
+        writer = DataWriter(catalog, batch_size=1000)
+
+        # WHEN we write features
+        features = self._make_features()
+        writer.write_features(features)
+
+        # THEN the buffer has one item
+        assert len(writer._features_buffer) == 1
+
+    def test_write_features_maps_fields_correctly(self):
+        """write_features correctly maps FeatureSnapshot fields to dict."""
+        # GIVEN a DataWriter
+        catalog = MagicMock()
+        writer = DataWriter(catalog, symbol="BTC-USD", batch_size=1000)
+
+        # WHEN we write features
+        features = self._make_features(
+            timestamp_ms=1704110400123,
+            spread_bps=15.5,
+            imbalance=-0.3,
+            depth=7.5,
+            volatility=2.1,
+        )
+        writer.write_features(features)
+
+        # THEN the dict has correct fields
+        row = writer._features_buffer[0]
+        assert row["timestamp_ms"] == 1704110400123
+        assert row["symbol"] == "BTC-USD"
+        assert row["spread_bps"] == 15.5
+        assert row["imbalance"] == -0.3
+        assert row["depth"] == 7.5
+        assert row["volatility"] == 2.1
+        # trade_imbalance should be None (not implemented yet)
+        assert row["trade_imbalance"] is None
+
+    def test_write_features_requires_timestamp_ms(self):
+        """write_features raises ValueError if timestamp_ms is None."""
+        # GIVEN a DataWriter and features without timestamp_ms
+        catalog = MagicMock()
+        writer = DataWriter(catalog)
+        features = FeatureSnapshot(
+            spread_bps=10.0,
+            imbalance=0.0,
+            depth=5.0,
+            volatility=1.0,
+            timestamp_ms=None,
+        )
+
+        # WHEN/THEN we get ValueError
+        with pytest.raises(ValueError, match="timestamp_ms"):
+            writer.write_features(features)
+
+    def test_write_features_triggers_batch_flush(self):
+        """write_features triggers flush when batch_size reached."""
+        # GIVEN a DataWriter with batch_size=2
+        catalog = MagicMock()
+        writer = DataWriter(catalog, batch_size=2)
+        writer._flush = MagicMock()
+
+        # WHEN we write 2 features
+        features = self._make_features()
+        writer.write_features(features)
+        assert writer._flush.call_count == 0
+
+        writer.write_features(features)
+
+        # THEN flush is triggered
+        assert writer._flush.call_count == 1
+
+
+class TestWritePrediction:
+    """Tests for write_prediction method."""
+
+    def _make_prediction(
+        self,
+        timestamp_ms: int = 1704110400000,
+        prediction: int = 1,
+        probability: float = 0.75,
+        label: int = 1,
+        labeled_at_ms: int = 1704110400500,
+    ) -> Prediction:
+        """Create a test Prediction."""
+        return Prediction(
+            timestamp_ms=timestamp_ms,
+            prediction=prediction,
+            probability=probability,
+            label=label,
+            labeled_at_ms=labeled_at_ms,
+        )
+
+    def test_write_prediction_adds_to_buffer(self):
+        """write_prediction adds prediction to buffer."""
+        # GIVEN a DataWriter
+        catalog = MagicMock()
+        writer = DataWriter(catalog, batch_size=1000)
+
+        # WHEN we write a prediction
+        pred = self._make_prediction()
+        writer.write_prediction(pred)
+
+        # THEN the buffer has one item
+        assert len(writer._predictions_buffer) == 1
+
+    def test_write_prediction_maps_fields_correctly(self):
+        """write_prediction correctly maps Prediction fields to dict."""
+        # GIVEN a DataWriter with custom model_id
+        catalog = MagicMock()
+        writer = DataWriter(
+            catalog, symbol="BTC-USD", model_id="transformer-v1", batch_size=1000
+        )
+
+        # WHEN we write a prediction
+        pred = self._make_prediction(
+            timestamp_ms=1704110400123,
+            prediction=0,
+            probability=0.35,
+            label=1,
+            labeled_at_ms=1704110400623,
+        )
+        writer.write_prediction(pred)
+
+        # THEN the dict has correct fields
+        row = writer._predictions_buffer[0]
+        assert row["timestamp_ms"] == 1704110400123
+        assert row["symbol"] == "BTC-USD"
+        assert row["model_id"] == "transformer-v1"
+        assert row["prediction"] == 0
+        assert row["probability"] == 0.35
+        assert row["label"] == 1
+        assert row["labeled_at_ms"] == 1704110400623
+
+    def test_write_prediction_uses_default_model_id(self):
+        """write_prediction uses default model_id when not specified."""
+        # GIVEN a DataWriter with default model_id
+        catalog = MagicMock()
+        writer = DataWriter(catalog, batch_size=1000)
+
+        # WHEN we write a prediction
+        pred = self._make_prediction()
+        writer.write_prediction(pred)
+
+        # THEN model_id is "sgd-v1"
+        row = writer._predictions_buffer[0]
+        assert row["model_id"] == "sgd-v1"
+
+    def test_write_prediction_triggers_batch_flush(self):
+        """write_prediction triggers flush when batch_size reached."""
+        # GIVEN a DataWriter with batch_size=2
+        catalog = MagicMock()
+        writer = DataWriter(catalog, batch_size=2)
+        writer._flush = MagicMock()
+
+        # WHEN we write 2 predictions
+        pred = self._make_prediction()
+        writer.write_prediction(pred)
+        assert writer._flush.call_count == 0
+
+        writer.write_prediction(pred)
+
+        # THEN flush is triggered
+        assert writer._flush.call_count == 1
+
+
+class TestDataWriterInitWithModelId:
+    """Tests for DataWriter initialization with model_id."""
+
+    def test_init_default_model_id(self):
+        """DataWriter initializes with default model_id."""
+        # GIVEN a mock catalog
+        catalog = MagicMock()
+
+        # WHEN we create a DataWriter
+        writer = DataWriter(catalog)
+
+        # THEN model_id is "sgd-v1"
+        assert writer._model_id == "sgd-v1"
+
+    def test_init_custom_model_id(self):
+        """DataWriter accepts custom model_id."""
+        # GIVEN a mock catalog
+        catalog = MagicMock()
+
+        # WHEN we create a DataWriter with custom model_id
+        writer = DataWriter(catalog, model_id="transformer-v1")
+
+        # THEN model_id is set
+        assert writer._model_id == "transformer-v1"
+
+    def test_init_creates_features_and_predictions_buffers(self):
+        """DataWriter initializes with empty features and predictions buffers."""
+        # GIVEN a mock catalog
+        catalog = MagicMock()
+
+        # WHEN we create a DataWriter
+        writer = DataWriter(catalog)
+
+        # THEN buffers are empty
+        assert writer._features_buffer == []
+        assert writer._predictions_buffer == []
+
+
 # =============================================================================
 # Integration Tests (require Postgres)
 # =============================================================================
@@ -527,3 +756,69 @@ class TestDataWriterIntegration:
 
         for i in range(3):
             assert (df["timestamp_ms"] == base_ts + i).any()
+
+    def test_write_features_to_iceberg(self, catalog):
+        """DataWriter successfully writes features data to Iceberg."""
+        # GIVEN a DataWriter with real catalog
+        writer = DataWriter(catalog, symbol="BTC-USD", batch_size=1000)
+
+        # WHEN we write and flush features
+        features = FeatureSnapshot(
+            spread_bps=10.5,
+            imbalance=0.25,
+            depth=5.0,
+            volatility=1.2,
+            timestamp="2024-01-01T12:00:00Z",
+            timestamp_ms=1704110400003,
+        )
+        writer.write_features(features)
+        writer.flush()
+
+        # THEN data exists in the table
+        from src.storage.schemas import NAMESPACE
+
+        table = catalog.load_table(f"{NAMESPACE}.features")
+        df = table.scan().to_pandas()
+
+        # Find our row by timestamp
+        row = df[df["timestamp_ms"] == 1704110400003]
+        assert len(row) >= 1
+        assert row.iloc[0]["symbol"] == "BTC-USD"
+        assert row.iloc[0]["spread_bps"] == 10.5
+        assert row.iloc[0]["imbalance"] == 0.25
+        assert row.iloc[0]["depth"] == 5.0
+        assert row.iloc[0]["volatility"] == 1.2
+
+    def test_write_prediction_to_iceberg(self, catalog):
+        """DataWriter successfully writes prediction data to Iceberg."""
+        # GIVEN a DataWriter with real catalog
+        writer = DataWriter(
+            catalog, symbol="BTC-USD", model_id="sgd-v1", batch_size=1000
+        )
+
+        # WHEN we write and flush a prediction
+        pred = Prediction(
+            timestamp_ms=1704110400004,
+            prediction=1,
+            probability=0.75,
+            label=1,
+            labeled_at_ms=1704110400504,
+        )
+        writer.write_prediction(pred)
+        writer.flush()
+
+        # THEN data exists in the table
+        from src.storage.schemas import NAMESPACE
+
+        table = catalog.load_table(f"{NAMESPACE}.predictions")
+        df = table.scan().to_pandas()
+
+        # Find our row by timestamp
+        row = df[df["timestamp_ms"] == 1704110400004]
+        assert len(row) >= 1
+        assert row.iloc[0]["symbol"] == "BTC-USD"
+        assert row.iloc[0]["model_id"] == "sgd-v1"
+        assert row.iloc[0]["prediction"] == 1
+        assert row.iloc[0]["probability"] == 0.75
+        assert row.iloc[0]["label"] == 1
+        assert row.iloc[0]["labeled_at_ms"] == 1704110400504

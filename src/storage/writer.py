@@ -7,8 +7,10 @@ from datetime import UTC, datetime
 import pyarrow as pa
 from pyiceberg.catalog import Catalog
 
+from src.features.extractor import FeatureSnapshot
 from src.ingest.order_book import OrderBookSnapshot
 from src.ingest.trade_buffer import Trade
+from src.model.classifier import Prediction
 from src.storage.schemas import NAMESPACE, ORDER_BOOK_DEPTH
 
 
@@ -26,6 +28,7 @@ class DataWriter:
         self,
         catalog: Catalog,
         symbol: str = "BTC-USD",
+        model_id: str = "sgd-v1",
         batch_size: int = 1000,
         flush_interval_sec: float = 10.0,
     ):
@@ -34,16 +37,20 @@ class DataWriter:
         Args:
             catalog: Iceberg catalog for table access.
             symbol: Trading pair symbol (e.g., "BTC-USD").
+            model_id: Model identifier for predictions (e.g., "sgd-v1").
             batch_size: Number of records before triggering flush.
             flush_interval_sec: Seconds between time-based flushes.
         """
         self._catalog = catalog
         self._symbol = symbol
+        self._model_id = model_id
         self._batch_size = batch_size
         self._flush_interval_sec = flush_interval_sec
 
         self._orderbook_buffer: list[dict] = []
         self._trades_buffer: list[dict] = []
+        self._features_buffer: list[dict] = []
+        self._predictions_buffer: list[dict] = []
         self._last_flush = time.time()
         self._lock = threading.RLock()
 
@@ -77,6 +84,36 @@ class DataWriter:
             self._trades_buffer.append(row)
             self._maybe_flush()
 
+    def write_features(self, features: FeatureSnapshot) -> None:
+        """Buffer features for writing.
+
+        Args:
+            features: Feature snapshot to write.
+
+        Raises:
+            ValueError: If features.timestamp_ms is None.
+        """
+        if features.timestamp_ms is None:
+            raise ValueError("features.timestamp_ms is required for persistence")
+
+        row = self._features_to_dict(features)
+
+        with self._lock:
+            self._features_buffer.append(row)
+            self._maybe_flush()
+
+    def write_prediction(self, prediction: Prediction) -> None:
+        """Buffer a prediction for writing.
+
+        Args:
+            prediction: Prediction to write.
+        """
+        row = self._prediction_to_dict(prediction)
+
+        with self._lock:
+            self._predictions_buffer.append(row)
+            self._maybe_flush()
+
     def flush(self) -> None:
         """Force flush all buffers to Iceberg tables."""
         with self._lock:
@@ -95,6 +132,8 @@ class DataWriter:
         max_buffer_size = max(
             len(self._orderbook_buffer),
             len(self._trades_buffer),
+            len(self._features_buffer),
+            len(self._predictions_buffer),
         )
         if max_buffer_size >= self._batch_size:
             self._flush()
@@ -103,7 +142,13 @@ class DataWriter:
         # Check time interval trigger
         elapsed = time.time() - self._last_flush
         if elapsed >= self._flush_interval_sec:
-            if self._orderbook_buffer or self._trades_buffer:
+            has_data = (
+                self._orderbook_buffer
+                or self._trades_buffer
+                or self._features_buffer
+                or self._predictions_buffer
+            )
+            if has_data:
                 self._flush()
 
     def _flush(self) -> None:
@@ -120,6 +165,16 @@ class DataWriter:
         if self._trades_buffer:
             self._write_to_table("raw_trades", self._trades_buffer)
             self._trades_buffer = []
+
+        # Write features data
+        if self._features_buffer:
+            self._write_to_table("features", self._features_buffer)
+            self._features_buffer = []
+
+        # Write predictions data
+        if self._predictions_buffer:
+            self._write_to_table("predictions", self._predictions_buffer)
+            self._predictions_buffer = []
 
         self._last_flush = time.time()
 
@@ -192,4 +247,42 @@ class DataWriter:
             "size": trade.size,
             "side": trade.side,
             "received_at": datetime.now(UTC),
+        }
+
+    def _features_to_dict(self, features: FeatureSnapshot) -> dict:
+        """Convert FeatureSnapshot to dict for Iceberg.
+
+        Args:
+            features: Feature snapshot.
+
+        Returns:
+            Dict matching features schema.
+        """
+        return {
+            "timestamp_ms": features.timestamp_ms,
+            "symbol": self._symbol,
+            "spread_bps": features.spread_bps,
+            "imbalance": features.imbalance,
+            "depth": features.depth,
+            "volatility": features.volatility,
+            "trade_imbalance": None,  # Not implemented yet
+        }
+
+    def _prediction_to_dict(self, prediction: Prediction) -> dict:
+        """Convert Prediction to dict for Iceberg.
+
+        Args:
+            prediction: Prediction object.
+
+        Returns:
+            Dict matching predictions schema.
+        """
+        return {
+            "timestamp_ms": prediction.timestamp_ms,
+            "symbol": self._symbol,
+            "model_id": self._model_id,
+            "prediction": prediction.prediction,
+            "probability": prediction.probability,
+            "label": prediction.label,
+            "labeled_at_ms": prediction.labeled_at_ms,
         }
