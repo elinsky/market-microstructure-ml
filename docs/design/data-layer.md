@@ -620,3 +620,37 @@ Configuration is driven by environment variables (`ICEBERG_CATALOG_URI`, `ICEBER
 - Symbol stored in constructor (not per-call) for consistency with other components
 - Passive flush triggers (no background thread) to match existing RLock patterns
 - Requires `timestamp_ms` on OrderBookSnapshot (raises ValueError if None)
+
+### Step 7: Implement DataWriter for features and predictions (Issue #48)
+
+**Status:** Complete
+
+**What was implemented:**
+
+1. **FeatureSnapshot enhancement** (`src/features/extractor.py`)
+   - Added `timestamp_ms: int | None` field to dataclass
+   - `FeatureExtractor.compute()` now passes through `timestamp_ms` from OrderBookSnapshot
+
+2. **Prediction dataclass** (`src/model/classifier.py`)
+   - New dataclass with fields: `timestamp_ms`, `prediction`, `probability`, `label`, `labeled_at_ms`
+   - Exported from `src/model/__init__.py`
+
+3. **DataWriter enhancements** (`src/storage/writer.py`)
+   - Added `model_id` constructor parameter (default "sgd-v1")
+   - Added `_features_buffer` and `_predictions_buffer`
+   - Added `write_features(features)`: buffers FeatureSnapshot, requires `timestamp_ms`
+   - Added `write_prediction(prediction)`: buffers Prediction with model_id
+   - Updated `_maybe_flush()` and `_flush()` to handle all 4 buffers
+
+4. **Row mapping**
+   - FeatureSnapshot → 7 columns: `timestamp_ms`, `symbol`, `spread_bps`, `imbalance`, `depth`, `volatility`, `trade_imbalance` (None for now)
+   - Prediction → 7 columns: `timestamp_ms`, `symbol`, `model_id`, `prediction`, `probability`, `label`, `labeled_at_ms`
+
+5. **Tests** (`tests/storage/test_writer.py`)
+   - 11 new unit tests for features and predictions
+   - 2 new integration tests (skipped without Postgres)
+
+**Design decisions:**
+- `model_id` in constructor (same pattern as `symbol`) - set once per writer instance
+- Write predictions with labels (single write after labeling, not separate prediction/update)
+- `trade_imbalance` writes `None` (schema has `required=False`, will be populated when trade flow features are added)

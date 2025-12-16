@@ -12,6 +12,20 @@ from src.features.extractor import FeatureSnapshot
 
 
 @dataclass
+class Prediction:
+    """A model prediction with its eventual label.
+
+    Created when a prediction is made and labeled after the prediction horizon.
+    """
+
+    timestamp_ms: int  # When prediction was made (ms since epoch)
+    prediction: int  # Predicted class (0 or 1)
+    probability: float  # P(price_change) in [0, 1]
+    label: int  # Actual outcome (0 or 1)
+    labeled_at_ms: int  # When label was determined (ms since epoch)
+
+
+@dataclass
 class ModelStats:
     """Statistics about the model's training state."""
 

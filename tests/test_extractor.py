@@ -204,3 +204,25 @@ class TestFeatureExtractor:
         # THEN timestamp is preserved
         assert result is not None
         assert result.timestamp == "2024-01-01T00:00:00Z"
+
+    def test_timestamp_ms_preserved_in_result(self):
+        """timestamp_ms is passed through to FeatureSnapshot."""
+        # GIVEN an extractor and a snapshot with timestamp_ms
+        extractor = FeatureExtractor()
+        snapshot = OrderBookSnapshot(
+            bids=[(Decimal("100.00"), Decimal("1.0"))],
+            asks=[(Decimal("101.00"), Decimal("1.0"))],
+            best_bid=Decimal("100.00"),
+            best_ask=Decimal("101.00"),
+            mid_price=Decimal("100.50"),
+            spread=Decimal("1.00"),
+            timestamp="2024-01-01T00:00:00Z",
+            timestamp_ms=1704067200000,
+        )
+
+        # WHEN we compute features
+        result = extractor.compute(snapshot)
+
+        # THEN timestamp_ms is preserved
+        assert result is not None
+        assert result.timestamp_ms == 1704067200000

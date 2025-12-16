@@ -17,6 +17,7 @@ class FeatureSnapshot:
     depth: float  # Total volume at top levels (in base currency)
     volatility: float  # Rolling std of mid-price changes (in bps)
     timestamp: str | None = None
+    timestamp_ms: int | None = None  # Exchange timestamp (ms since epoch)
 
 
 class FeatureExtractor:
@@ -69,6 +70,7 @@ class FeatureExtractor:
                 depth=depth,
                 volatility=volatility,
                 timestamp=snapshot.timestamp,
+                timestamp_ms=snapshot.timestamp_ms,
             )
 
     def _compute_spread_bps(self, snapshot: OrderBookSnapshot) -> float:
