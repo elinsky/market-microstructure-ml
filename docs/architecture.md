@@ -33,10 +33,12 @@ flowchart LR
         FE --> DW
         L --> DW
         DW --> ICE[(Iceberg)]
+        ICE --> DR[DataReader]
     end
 
     CB[Coinbase WS API] --> WS
     D --> U[User]
+    DR -.-> BT[Backtesting]
 ```
 
 ## 2. Component Diagram
@@ -64,9 +66,12 @@ src/
 ├── storage/
 │   ├── catalog.py            # Iceberg catalog factory (Postgres-backed)
 │   ├── schemas.py            # Table schema definitions (raw_orderbook, raw_trades, etc.)
-│   └── writer.py             # DataWriter: batched persistence to Iceberg
-│                              # - Dual flush triggers (batch size, time interval)
-│                              # - Thread-safe with RLock
+│   ├── writer.py             # DataWriter: batched persistence to Iceberg
+│   │                          # - Dual flush triggers (batch size, time interval)
+│   │                          # - Thread-safe with RLock
+│   └── reader.py             # DataReader: read historical data for replay
+│                              # - Iterator-based access to all 4 tables
+│                              # - Returns dataclasses in chronological order
 │
 ├── dashboard/
 │   └── app.py                # Plotly Dash app
@@ -211,7 +216,6 @@ stateDiagram-v2
 - WebSocket-based dashboard (replace polling with push)
 - Multi-symbol support (ETH-USD, SOL-USD)
 - GCS backend for production (Cloud SQL Postgres + GCS warehouse)
-- DataReader for historical replay
-- Offline training pipeline
+- Offline training pipeline (using DataReader for historical replay)
 - Model hot-reload
 - Kubernetes deployment for horizontal scaling
