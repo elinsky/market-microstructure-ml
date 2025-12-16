@@ -680,3 +680,38 @@ Configuration is driven by environment variables (`ICEBERG_CATALOG_URI`, `ICEBER
 - Graceful degradation: if persistence init fails, logs warning and continues without persistence
 - TradeBuffer created only when persistence is enabled (trades processed via callback)
 - Predictions written after labeling (includes both prediction and label in single write)
+
+### Step 9: Implement DataReader (Issue #50)
+
+**Status:** Complete
+
+**What was implemented:**
+
+1. **DataReader class** (`src/storage/reader.py`)
+   - `read_orderbook()` → Iterator of `OrderBookSnapshot`
+   - `read_trades()` → Iterator of `Trade`
+   - `read_features()` → Iterator of `FeatureSnapshot`
+   - `read_predictions()` → Iterator of `Prediction`
+
+2. **Features:**
+   - Filter by date range (start_date inclusive, end_date inclusive)
+   - Filter by symbol (default "BTC-USD")
+   - Results sorted by `timestamp_ms` ascending (chronological order)
+   - Returns existing dataclasses for type safety and consistency with live pipeline
+   - Iterator pattern for memory efficiency with large datasets
+
+3. **OrderBookSnapshot reconstruction:**
+   - Reconstructs `bids`/`asks` lists from flattened columns (`bid_0_price`, etc.)
+   - Recomputes derived fields (`best_bid`, `best_ask`, `mid_price`, `spread`)
+
+4. **Exports** (`src/storage/__init__.py`)
+   - `DataReader` now exported from storage package
+
+5. **Tests** (`tests/storage/test_reader.py`)
+   - 21 unit tests with mocked catalog
+   - 6 integration tests (skipped without Postgres)
+
+**Design decisions:**
+- Always sort results by `timestamp_ms` for guaranteed chronological order (Iceberg scan doesn't guarantee row order)
+- Return dataclasses (not raw dicts) for type safety and consistency with live pipeline
+- Date filtering converts `date` to timestamp_ms range (start of day → end of day UTC)

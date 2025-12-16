@@ -62,7 +62,7 @@ Basically: **streaming data -> features -> predictions -> trading decisions -> d
 | More depth (10-20 levels, not 3) | Better features, more signal | [#35](https://github.com/elinsky/market-microstructure-ml/issues/35) | done |
 | Trade data (matches channel) | Trade flow imbalance, aggressor detection | [#35](https://github.com/elinsky/market-microstructure-ml/issues/35) | done |
 | Save data to disk (Parquet or DB) | Backtesting, retraining | [#35](https://github.com/elinsky/market-microstructure-ml/issues/35) | done |
-| Replay historical data | Test models on past data | [#35](https://github.com/elinsky/market-microstructure-ml/issues/35) | - |
+| Replay historical data | Test models on past data | [#35](https://github.com/elinsky/market-microstructure-ml/issues/35) | done |
 | Multi-symbol (BTC + ETH) | Shows it's not hardcoded | - | - |
 
 ### Features
