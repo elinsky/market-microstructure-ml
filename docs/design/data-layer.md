@@ -582,3 +582,41 @@ Configuration is driven by environment variables (`ICEBERG_CATALOG_URI`, `ICEBER
 5. **Tests**
    - 15 tests for TradeBuffer (add, get_recent, get_trades_since, max_trades, thread safety)
    - 6 tests for WebSocket match handling
+
+### Step 6: Implement DataWriter for raw_orderbook and raw_trades (Issue #47)
+
+**Status:** Complete
+
+**What was implemented:**
+
+1. **OrderBookSnapshot enhancement** (`src/ingest/order_book.py`)
+   - Added `timestamp_ms: int | None` field to dataclass
+   - Added `_parse_timestamp_ms()` static method for ISO8601 → epoch ms conversion
+   - `get_snapshot()` now populates `timestamp_ms` automatically
+
+2. **DataWriter class** (`src/storage/writer.py`)
+   - Constructor accepts `catalog`, `symbol` (default "BTC-USD"), `batch_size` (default 1000), `flush_interval_sec` (default 10.0)
+   - `write_orderbook(snapshot)`: buffers OrderBookSnapshot, maps to flattened row format
+   - `write_trade(trade)`: buffers Trade, maps to raw_trades row format
+   - `flush()`: force flush all buffers to Iceberg
+   - `close()`: flush and clean up (for graceful shutdown)
+   - Passive time-based flushing (checks elapsed time on each write)
+   - Thread-safe with `threading.RLock`
+
+3. **Row mapping**
+   - OrderBookSnapshot → 43 columns: `timestamp_ms`, `symbol`, `received_at`, plus 40 bid/ask columns (`bid_0_price`, `bid_0_size`, ..., `ask_9_size`)
+   - Missing levels padded with `None`
+   - Trade → 7 columns: `trade_id`, `timestamp_ms`, `symbol`, `price`, `size`, `side`, `received_at`
+
+4. **Exports** (`src/storage/__init__.py`)
+   - `DataWriter` now exported from storage package
+
+5. **Tests** (`tests/storage/test_writer.py`)
+   - 17 unit tests with mocked catalog
+   - 3 integration tests (skipped without Postgres)
+   - Coverage: 96% for writer.py, 100% for order_book.py
+
+**Design decisions:**
+- Symbol stored in constructor (not per-call) for consistency with other components
+- Passive flush triggers (no background thread) to match existing RLock patterns
+- Requires `timestamp_ms` on OrderBookSnapshot (raises ValueError if None)

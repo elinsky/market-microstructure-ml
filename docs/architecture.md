@@ -53,6 +53,13 @@ src/
 │                              # - partial_fit() for online learning
 │                              # - record_prediction() for accuracy tracking
 │
+├── storage/
+│   ├── catalog.py            # Iceberg catalog factory (Postgres-backed)
+│   ├── schemas.py            # Table schema definitions (raw_orderbook, raw_trades, etc.)
+│   └── writer.py             # DataWriter: batched persistence to Iceberg
+│                              # - Dual flush triggers (batch size, time interval)
+│                              # - Thread-safe with RLock
+│
 ├── dashboard/
 │   └── app.py                # Plotly Dash app
 │                              # - Polls shared state at 300ms
@@ -171,7 +178,7 @@ flowchart LR
 **Thread-safe components:**
 - `OrderBook`: RLock protects bid/ask updates and snapshot reads
 - `TradeBuffer`: RLock protects trade buffer modifications and queries
-- `DataWriter` (planned): RLock will protect write buffers
+- `DataWriter`: RLock protects write buffers during batched persistence
 
 ## 7. State Machine
 

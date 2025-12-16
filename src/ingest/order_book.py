@@ -2,6 +2,7 @@
 
 import threading
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 
 
@@ -16,6 +17,7 @@ class OrderBookSnapshot:
     bids: list[tuple[Decimal, Decimal]]  # [(price, size), ...]
     asks: list[tuple[Decimal, Decimal]]  # [(price, size), ...]
     timestamp: str | None = None
+    timestamp_ms: int | None = None
 
 
 class OrderBook:
@@ -106,6 +108,9 @@ class OrderBook:
                 mid_price = (best_bid + best_ask) / 2
                 spread = best_ask - best_bid
 
+            # Parse timestamp to milliseconds
+            timestamp_ms = self._parse_timestamp_ms(self._last_timestamp)
+
             return OrderBookSnapshot(
                 best_bid=best_bid,
                 best_ask=best_ask,
@@ -114,4 +119,24 @@ class OrderBook:
                 bids=sorted_bids,
                 asks=sorted_asks,
                 timestamp=self._last_timestamp,
+                timestamp_ms=timestamp_ms,
             )
+
+    @staticmethod
+    def _parse_timestamp_ms(iso_timestamp: str | None) -> int | None:
+        """Parse ISO8601 timestamp to milliseconds since epoch.
+
+        Args:
+            iso_timestamp: ISO8601 timestamp string
+                (e.g., "2024-01-01T12:00:00.123456Z").
+
+        Returns:
+            Milliseconds since Unix epoch, or None if parsing fails.
+        """
+        if not iso_timestamp:
+            return None
+        try:
+            dt = datetime.fromisoformat(iso_timestamp.replace("Z", "+00:00"))
+            return int(dt.timestamp() * 1000)
+        except ValueError:
+            return None

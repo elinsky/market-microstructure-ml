@@ -133,3 +133,42 @@ class TestOrderBook:
         # THEN the timestamp is stored in the snapshot
         snapshot = book.get_snapshot()
         assert snapshot.timestamp == "2024-01-01T00:00:00Z"
+
+    def test_apply_update_stores_timestamp_ms(self):
+        """Timestamp is converted to milliseconds since epoch."""
+        # GIVEN a populated order book
+        book = self.make_populated_book()
+
+        # WHEN we apply an update with an ISO timestamp
+        book.apply_update(
+            [["buy", "97.00", "1.0"]], timestamp="2024-01-01T12:00:00.123456Z"
+        )
+
+        # THEN timestamp_ms contains milliseconds since epoch
+        snapshot = book.get_snapshot()
+        # 2024-01-01T12:00:00.123Z = 1704110400123 ms
+        assert snapshot.timestamp_ms == 1704110400123
+
+    def test_timestamp_ms_none_when_no_timestamp(self):
+        """timestamp_ms is None when no timestamp provided."""
+        # GIVEN an empty order book
+        book = self.make_empty_book()
+
+        # WHEN we get snapshot without any updates
+        snapshot = book.get_snapshot()
+
+        # THEN timestamp_ms is None
+        assert snapshot.timestamp_ms is None
+
+    def test_timestamp_ms_none_for_invalid_timestamp(self):
+        """timestamp_ms is None when timestamp cannot be parsed."""
+        # GIVEN a populated order book
+        book = self.make_populated_book()
+
+        # WHEN we apply an update with an invalid timestamp
+        book.apply_update([["buy", "97.00", "1.0"]], timestamp="invalid-timestamp")
+
+        # THEN timestamp_ms is None but timestamp string is preserved
+        snapshot = book.get_snapshot()
+        assert snapshot.timestamp == "invalid-timestamp"
+        assert snapshot.timestamp_ms is None
