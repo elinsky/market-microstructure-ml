@@ -9,10 +9,12 @@ from src.storage.schemas import (
     RAW_TRADES_SCHEMA,
     create_tables,
 )
+from src.storage.writer import DataWriter
 
 __all__ = [
     "get_catalog",
     "create_tables",
+    "DataWriter",
     "NAMESPACE",
     "RAW_ORDERBOOK_SCHEMA",
     "RAW_TRADES_SCHEMA",
