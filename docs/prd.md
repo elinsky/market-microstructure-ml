@@ -42,9 +42,10 @@ Basically: **streaming data -> features -> predictions -> trading decisions -> d
 
 ## Current Status
 
-- Coinbase WebSocket for L2 order book (keeping top 10 levels)
+- Coinbase WebSocket for L2 order book (keeping top 10 levels) + trades (matches channel)
 - 4 basic features: spread_bps, imbalance, depth, volatility
 - SGDClassifier that trains online
+- Optional persistence to Iceberg/Parquet (raw data, features, predictions)
 - Dash dashboard that polls every 300ms
 - Running on Google Cloud Run
 - Simple rolling accuracy tracking
@@ -60,7 +61,7 @@ Basically: **streaming data -> features -> predictions -> trading decisions -> d
 |------|-----|------|--------|
 | More depth (10-20 levels, not 3) | Better features, more signal | [#35](https://github.com/elinsky/market-microstructure-ml/issues/35) | done |
 | Trade data (matches channel) | Trade flow imbalance, aggressor detection | [#35](https://github.com/elinsky/market-microstructure-ml/issues/35) | done |
-| Save data to disk (Parquet or DB) | Backtesting, retraining | [#35](https://github.com/elinsky/market-microstructure-ml/issues/35) | in progress |
+| Save data to disk (Parquet or DB) | Backtesting, retraining | [#35](https://github.com/elinsky/market-microstructure-ml/issues/35) | done |
 | Replay historical data | Test models on past data | [#35](https://github.com/elinsky/market-microstructure-ml/issues/35) | - |
 | Multi-symbol (BTC + ETH) | Shows it's not hardcoded | - | - |
 

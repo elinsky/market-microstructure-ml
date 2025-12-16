@@ -147,6 +147,34 @@ class TestLabeler:
         assert result is not None
         assert result.prediction_at_t == 1
 
+    def test_probability_stored_with_sample(self):
+        """Probability at time t is stored in labeled sample."""
+        # GIVEN a labeler with a sample that includes a probability
+        labeler = self.make_labeler(delta_ms=500)
+        features = self.make_features()
+        labeler.add_sample(1000, 100.0, features, prediction=1, probability=0.75)
+
+        # WHEN the label is emitted
+        result = labeler.add_sample(1500, 100.0, features)
+
+        # THEN the probability is included in the result
+        assert result is not None
+        assert result.probability_at_t == 0.75
+
+    def test_probability_defaults_to_none(self):
+        """Probability defaults to None when not provided."""
+        # GIVEN a labeler with a sample without probability
+        labeler = self.make_labeler(delta_ms=500)
+        features = self.make_features()
+        labeler.add_sample(1000, 100.0, features, prediction=1)
+
+        # WHEN the label is emitted
+        result = labeler.add_sample(1500, 100.0, features)
+
+        # THEN the probability is None
+        assert result is not None
+        assert result.probability_at_t is None
+
     def test_flush_clears_buffer(self):
         """Flush clears all buffered samples."""
         # GIVEN a labeler with samples in the buffer

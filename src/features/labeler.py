@@ -17,6 +17,7 @@ class LabeledSample:
     mid_price_t_delta: float  # Price at time t + delta
     price_change_pct: float  # Percentage change
     prediction_at_t: int | None = None  # Prediction made at time t (for accuracy)
+    probability_at_t: float | None = None  # Probability at time t (for persistence)
 
 
 class Labeler:
@@ -48,10 +49,10 @@ class Labeler:
         self._threshold = threshold_pct / 100  # Convert to decimal
         self._max_buffer_size = max_buffer_size
 
-        # Buffer stores (timestamp_ms, mid_price, features, prediction)
-        self._buffer: deque[tuple[float, float, FeatureSnapshot, int | None]] = deque(
-            maxlen=max_buffer_size
-        )
+        # Buffer stores (timestamp_ms, mid_price, features, prediction, probability)
+        self._buffer: deque[
+            tuple[float, float, FeatureSnapshot, int | None, float | None]
+        ] = deque(maxlen=max_buffer_size)
         self._lock = threading.RLock()
 
     @property
@@ -76,6 +77,7 @@ class Labeler:
         mid_price: float,
         features: FeatureSnapshot,
         prediction: int | None = None,
+        probability: float | None = None,
     ) -> LabeledSample | None:
         """Add a new sample and return a labeled sample if one is ready.
 
@@ -84,13 +86,16 @@ class Labeler:
             mid_price: Current mid price.
             features: Current feature snapshot.
             prediction: Optional prediction made at this time (for accuracy tracking).
+            probability: Optional probability at this time (for persistence).
 
         Returns:
             LabeledSample if a buffered sample is old enough, else None.
         """
         with self._lock:
-            # Add current sample to buffer (with prediction for accuracy tracking)
-            self._buffer.append((timestamp_ms, mid_price, features, prediction))
+            # Add current sample to buffer (with prediction and probability)
+            self._buffer.append(
+                (timestamp_ms, mid_price, features, prediction, probability)
+            )
 
             # Check if oldest sample is ready for labeling
             return self._try_emit_label(timestamp_ms, mid_price)
@@ -113,7 +118,13 @@ class Labeler:
             return None
 
         # Check oldest sample
-        oldest_ts, oldest_price, oldest_features, oldest_prediction = self._buffer[0]
+        (
+            oldest_ts,
+            oldest_price,
+            oldest_features,
+            oldest_prediction,
+            oldest_probability,
+        ) = self._buffer[0]
         age_ms = current_timestamp_ms - oldest_ts
 
         if age_ms >= self._delta_ms:
@@ -136,6 +147,7 @@ class Labeler:
                 mid_price_t_delta=current_mid_price,
                 price_change_pct=price_change_pct * 100,  # Convert to percentage
                 prediction_at_t=oldest_prediction,
+                probability_at_t=oldest_probability,
             )
 
         return None
