@@ -14,8 +14,10 @@ from src.features import FeatureExtractor, FeatureSnapshot, Labeler, StabilitySc
 from src.features.stability import StabilityScore
 from src.ingest import CoinbaseWebSocketClient, OrderBook
 from src.ingest.order_book import OrderBookSnapshot
-from src.model import OnlineClassifier
+from src.ingest.trade_buffer import Trade, TradeBuffer
+from src.model import OnlineClassifier, Prediction
 from src.model.classifier import ModelStats
+from src.storage import DataWriter, create_tables, get_catalog
 
 # Configure logging
 logging.basicConfig(
@@ -44,6 +46,17 @@ class QuoteWatchRunner:
         Args:
             symbol: Trading pair to track.
         """
+        self._init_components(symbol)
+        self._init_websocket(symbol)
+
+    def _init_components(self, symbol: str) -> None:
+        """Initialize pipeline components.
+
+        Separated for testability - allows tests to mock persistence setup.
+
+        Args:
+            symbol: Trading pair to track.
+        """
         self.symbol = symbol
         self.order_book = OrderBook(depth=10)
         self.feature_extractor = FeatureExtractor(volatility_window=50)
@@ -53,13 +66,48 @@ class QuoteWatchRunner:
         self.labeler = Labeler(delta_ms=500, threshold_pct=0.01)
         self.classifier = OnlineClassifier(learning_rate=0.01)
 
-        self.ws_client = CoinbaseWebSocketClient(
-            order_book=self.order_book,
-            symbol=symbol,
-            on_update=self._on_order_book_update,
-        )
+        # Persistence components (optional)
+        self._writer: DataWriter | None = None
+        self._trade_buffer: TradeBuffer | None = None
+
+        if os.environ.get("ENABLE_PERSISTENCE", "").lower() == "true":
+            self._init_persistence(symbol)
+
         self._loop: asyncio.AbstractEventLoop | None = None
         self._thread: threading.Thread | None = None
+
+    def _init_persistence(self, symbol: str) -> None:
+        """Initialize persistence layer (catalog, tables, writer).
+
+        Args:
+            symbol: Trading pair to track.
+        """
+        logger.info("Initializing persistence layer...")
+        try:
+            catalog = get_catalog()
+            create_tables(catalog)
+            self._writer = DataWriter(catalog=catalog, symbol=symbol)
+            self._trade_buffer = TradeBuffer()
+            logger.info("Persistence layer initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize persistence: {e}")
+            logger.warning("Continuing without persistence")
+            self._writer = None
+            self._trade_buffer = None
+
+    def _init_websocket(self, symbol: str) -> None:
+        """Initialize WebSocket client.
+
+        Args:
+            symbol: Trading pair to track.
+        """
+        self.ws_client = CoinbaseWebSocketClient(
+            order_book=self.order_book,
+            trade_buffer=self._trade_buffer,
+            symbol=symbol,
+            on_update=self._on_order_book_update,
+            on_trade=self._on_trade if self._writer else None,
+        )
 
     def process_snapshot(
         self, snapshot: OrderBookSnapshot, timestamp_ms: float
@@ -76,6 +124,10 @@ class QuoteWatchRunner:
         Returns:
             PipelineResult containing features, stability, prediction, and model stats.
         """
+        # Write order book to persistence (if enabled)
+        if self._writer is not None:
+            self._writer.write_orderbook(snapshot)
+
         # Extract features
         features = self.feature_extractor.compute(snapshot)
 
@@ -95,9 +147,17 @@ class QuoteWatchRunner:
             prediction_proba = self.classifier.predict_proba(features)
             current_prediction = self.classifier.predict(features)
 
-            # Add sample to labeler with current prediction for accuracy tracking
+            # Write features to persistence (if enabled)
+            if self._writer is not None:
+                self._writer.write_features(features)
+
+            # Add sample to labeler with current prediction and probability
             labeled_sample = self.labeler.add_sample(
-                timestamp_ms, mid_price, features, prediction=current_prediction
+                timestamp_ms,
+                mid_price,
+                features,
+                prediction=current_prediction,
+                probability=prediction_proba,
             )
 
             # If we got a labeled sample, train the model and record accuracy
@@ -112,6 +172,17 @@ class QuoteWatchRunner:
                         labeled_sample.prediction_at_t, labeled_sample.label
                     )
 
+                # Write prediction with label to persistence (if enabled)
+                if self._writer is not None:
+                    prediction = Prediction(
+                        timestamp_ms=int(labeled_sample.features.timestamp_ms or 0),
+                        prediction=labeled_sample.prediction_at_t or 0,
+                        probability=labeled_sample.probability_at_t or 0.5,
+                        label=labeled_sample.label,
+                        labeled_at_ms=int(timestamp_ms),
+                    )
+                    self._writer.write_prediction(prediction)
+
             # Get model statistics
             model_stats = self.classifier.get_stats()
 
@@ -121,6 +192,15 @@ class QuoteWatchRunner:
             prediction_proba=prediction_proba,
             model_stats=model_stats,
         )
+
+    def _on_trade(self, trade: Trade) -> None:
+        """Callback when a trade is received.
+
+        Args:
+            trade: The trade that was received.
+        """
+        if self._writer is not None:
+            self._writer.write_trade(trade)
 
     def _on_order_book_update(self) -> None:
         """Callback when order book is updated."""
@@ -180,8 +260,15 @@ class QuoteWatchRunner:
         self._thread.start()
 
     def stop(self) -> None:
-        """Stop the WebSocket client."""
-        logger.info("Shutting down WebSocket client...")
+        """Stop the WebSocket client and flush persistence."""
+        logger.info("Shutting down...")
+
+        # Flush and close DataWriter (if enabled)
+        if self._writer is not None:
+            logger.info("Flushing data writer...")
+            self._writer.close()
+
+        # Stop WebSocket client
         if self._loop and self._loop.is_running():
             asyncio.run_coroutine_threadsafe(self.ws_client.stop(), self._loop)
 

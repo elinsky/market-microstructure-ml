@@ -654,3 +654,29 @@ Configuration is driven by environment variables (`ICEBERG_CATALOG_URI`, `ICEBER
 - `model_id` in constructor (same pattern as `symbol`) - set once per writer instance
 - Write predictions with labels (single write after labeling, not separate prediction/update)
 - `trade_imbalance` writes `None` (schema has `required=False`, will be populated when trade flow features are added)
+
+### Step 8: Wire DataWriter into runner (Issue #49)
+
+**Changes:**
+
+1. **LabeledSample enhancement** (`src/features/labeler.py`)
+   - Added `probability_at_t: float | None` field to dataclass
+   - `Labeler.add_sample()` now accepts `probability` parameter
+   - Buffer stores and returns probability alongside prediction
+
+2. **QuoteWatchRunner persistence** (`src/run_live.py`)
+   - Added `ENABLE_PERSISTENCE` env var check
+   - `_init_persistence()`: initializes catalog, creates tables, creates DataWriter and TradeBuffer
+   - `_on_trade()`: callback writes trades to DataWriter
+   - `process_snapshot()`: writes orderbook, features, and predictions (with labels) to DataWriter
+   - `stop()`: calls `writer.close()` for graceful shutdown
+
+3. **Tests** (`tests/test_run_live.py`)
+   - 12 new persistence tests covering init, writes, and shutdown
+   - Updated existing test helper to include `_writer` and `_trade_buffer`
+
+**Design decisions:**
+- Persistence is opt-in via `ENABLE_PERSISTENCE=true` env var (explicit toggle)
+- Graceful degradation: if persistence init fails, logs warning and continues without persistence
+- TradeBuffer created only when persistence is enabled (trades processed via callback)
+- Predictions written after labeling (includes both prediction and label in single write)

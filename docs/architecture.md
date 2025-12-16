@@ -6,9 +6,10 @@ This document describes the system architecture for QuoteWatch, a real-time mark
 
 QuoteWatch predicts short-term price changes (Δ=500ms) using L2 order book data from Coinbase. The system:
 
-- Ingests real-time WebSocket data
+- Ingests real-time WebSocket data (L2 order book + trades)
 - Extracts features from order book snapshots
 - Trains an online ML model from live data
+- Persists all data to Iceberg/Parquet (optional)
 - Displays predictions via a polling dashboard
 - Runs on Google Cloud Run
 
@@ -20,12 +21,18 @@ High-level view of system boundaries and external interactions.
 flowchart LR
     subgraph QuoteWatch["QuoteWatch System"]
         WS[WS Client] --> OB[Order Book]
+        WS --> TB[Trade Buffer]
         OB --> FE[Feature Extractor]
         FE --> L[Labeler<br/>Δ=500ms]
         FE --> C[Classifier<br/>SGD+Scaler]
         L -->|partial_fit| C
         C --> SS[Shared State]
         SS --> D[Dashboard<br/>Dash app]
+        OB --> DW[DataWriter]
+        TB --> DW
+        FE --> DW
+        L --> DW
+        DW --> ICE[(Iceberg)]
     end
 
     CB[Coinbase WS API] --> WS
@@ -138,6 +145,9 @@ flowchart TD
 ### Environment Variables
 
 - `PORT`: HTTP port (default 8050, Cloud Run sets this)
+- `ENABLE_PERSISTENCE`: Set to `true` to enable Iceberg persistence
+- `ICEBERG_CATALOG_URI`: Postgres connection string for Iceberg catalog
+- `ICEBERG_WAREHOUSE`: Warehouse path (local file:// or gs://)
 
 ### Deployment Command
 
@@ -200,7 +210,8 @@ stateDiagram-v2
 
 - WebSocket-based dashboard (replace polling with push)
 - Multi-symbol support (ETH-USD, SOL-USD)
-- Parquet data persistence
+- GCS backend for production (Cloud SQL Postgres + GCS warehouse)
+- DataReader for historical replay
 - Offline training pipeline
 - Model hot-reload
 - Kubernetes deployment for horizontal scaling
