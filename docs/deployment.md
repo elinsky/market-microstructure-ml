@@ -116,6 +116,21 @@ gcloud projects add-iam-policy-binding ${PROJECT_ID} \
   --member="serviceAccount:github-deploy@${PROJECT_ID}.iam.gserviceaccount.com" \
   --role="roles/storage.admin"
 
+# Artifact Registry Admin - read/write container images
+gcloud projects add-iam-policy-binding ${PROJECT_ID} \
+  --member="serviceAccount:github-deploy@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/artifactregistry.admin"
+
+# Cloud Build Editor - trigger builds from source
+gcloud projects add-iam-policy-binding ${PROJECT_ID} \
+  --member="serviceAccount:github-deploy@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/cloudbuild.builds.editor"
+
+# Service Usage Consumer - use GCP services
+gcloud projects add-iam-policy-binding ${PROJECT_ID} \
+  --member="serviceAccount:github-deploy@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/serviceusage.serviceUsageConsumer"
+
 # Service Account User - act as compute service account
 gcloud projects add-iam-policy-binding ${PROJECT_ID} \
   --member="serviceAccount:github-deploy@${PROJECT_ID}.iam.gserviceaccount.com" \

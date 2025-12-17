@@ -154,7 +154,21 @@ flowchart TD
 - `ICEBERG_CATALOG_URI`: Postgres connection string for Iceberg catalog
 - `ICEBERG_WAREHOUSE`: Warehouse path (local file:// or gs://)
 
-### Deployment Command
+### CI/CD Pipeline
+
+Deployments are automated via GitHub Actions:
+
+1. PR merged to `main` triggers CI workflow
+2. `lint` and `test` jobs run in parallel
+3. If both pass, `deploy` job runs
+4. Deploy authenticates via Workload Identity Federation (no service account keys)
+5. `gcloud run deploy --source .` builds and deploys
+
+See [docs/deployment.md](deployment.md) for full setup details.
+
+### Manual Deployment
+
+For emergencies:
 
 ```bash
 gcloud run deploy quotewatch \
