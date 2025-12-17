@@ -229,7 +229,6 @@ stateDiagram-v2
 
 - WebSocket-based dashboard (replace polling with push)
 - Multi-symbol support (ETH-USD, SOL-USD)
-- GCS backend for production (Cloud SQL Postgres + GCS warehouse)
 - Offline training pipeline (using DataReader for historical replay)
 - Model hot-reload
 - Kubernetes deployment for horizontal scaling
