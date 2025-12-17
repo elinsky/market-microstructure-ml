@@ -69,7 +69,7 @@ flowchart TB
 
     subgraph Ingestion["Ingestion Layer"]
         WSClient[WebSocketClient]
-        OB[OrderBook<br/>depth=20]
+        OB[OrderBook<br/>depth=10]
         TB[TradeBuffer]
     end
 
