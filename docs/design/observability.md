@@ -115,8 +115,10 @@ flowchart TB
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
 | `coinbase_messages_received_total` | Counter | `type` (l2update, match, snapshot) | Total messages received from WebSocket |
-| `coinbase_match_sequence` | Gauge | - | Last match sequence number (for gap detection) |
-| `coinbase_sequence_gaps_total` | Counter | - | Number of detected sequence gaps |
+| `websocket_reconnections_total` | Counter | - | Number of WebSocket reconnections |
+| `coinbase_last_trade_id` | Gauge | - | Last trade_id received (for gap detection) |
+| `coinbase_trade_gaps_total` | Counter | - | Number of detected trade_id gaps |
+| `coinbase_trades_missed_total` | Counter | - | Total trades missed (sum of gap sizes) |
 | `iceberg_rows_written_total` | Counter | `table` (raw_orderbook, raw_trades, features, predictions) | Rows written per table |
 | `iceberg_flush_total` | Counter | `table` | Number of flush operations |
 | `iceberg_flush_duration_seconds` | Histogram | `table` | Time to flush batch to Iceberg |
@@ -155,29 +157,33 @@ flowchart TB
 
 ## 5. Gap Detection Strategy
 
-### 5.1 Sequence Number Tracking
+### 5.1 Trade Gap Detection (trade_id)
 
-Coinbase `match` messages include a `sequence` field. Track gaps:
+Coinbase `match` messages include a `trade_id` field that increments sequentially for each trade. Track gaps by comparing consecutive trade IDs:
 
 ```python
-class SequenceTracker:
+class TradeGapTracker:
     def __init__(self):
-        self._last_sequence: int | None = None
-        self._gaps_detected = Counter("coinbase_sequence_gaps_total")
+        self._last_trade_id: int | None = None
+        self._gaps_detected = Counter("coinbase_trade_gaps_total")
+        self._trades_missed = Counter("coinbase_trades_missed_total")
 
-    def check(self, sequence: int) -> None:
-        if self._last_sequence is not None:
-            expected = self._last_sequence + 1
-            if sequence != expected:
-                gap_size = sequence - expected
+    def check(self, trade_id: int) -> None:
+        if self._last_trade_id is not None:
+            expected = self._last_trade_id + 1
+            if trade_id != expected:
+                gap_size = trade_id - expected
                 self._gaps_detected.inc()
-                logger.warning(f"Sequence gap: expected {expected}, got {sequence} (gap={gap_size})")
-        self._last_sequence = sequence
+                self._trades_missed.inc(gap_size)
+                logger.warning(f"Trade gap: expected {expected}, got {trade_id} (missed={gap_size})")
+        self._last_trade_id = trade_id
 ```
 
-### 5.2 Row Count Reconciliation
+**Note:** The `sequence` field in match messages increments for *all* exchange events (orders, cancels, trades), so gaps in `sequence` are expected. Use `trade_id` for trade-specific gap detection.
 
-Compare messages received vs rows written:
+### 5.2 Orderbook Completeness (input/output counters)
+
+Coinbase guarantees delivery for `level2_batch`, but messages could still be lost in our pipeline (processing errors, buffer overflow, write failures). Detect this by comparing input vs output:
 
 ```
 Data Completeness = iceberg_rows_written_total / coinbase_messages_received_total
@@ -358,12 +364,23 @@ def push_metrics():
 
 ### 7.3 Local Development
 
-Same metrics, same Grafana Cloud destination. Differentiate with labels:
+Same metrics, same Grafana Cloud destination. Differentiate with `environment` label:
 
 ```python
 environment = os.environ.get("ENVIRONMENT", "local")
-# Add as label to all metrics or use separate job name
+
+# All metrics include environment label
+messages_received = Counter(
+    "coinbase_messages_received_total",
+    "Total messages received from Coinbase",
+    ["type", "environment"]
+)
+
+# Usage
+messages_received.labels(type="match", environment=environment).inc()
 ```
+
+Query in Grafana: `coinbase_messages_received_total{environment="production"}`
 
 ---
 
