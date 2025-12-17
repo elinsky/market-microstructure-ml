@@ -62,7 +62,7 @@ One-time setup for Workload Identity Federation. This allows GitHub Actions to a
 | Setting | Value |
 |---------|-------|
 | GCP Project ID | `quotewatch-prod` |
-| GCP Project Number | *(run `gcloud projects describe quotewatch-prod --format="value(projectNumber)"`)* |
+| GCP Project Number | `275631345026` |
 | GitHub Repo | `elinsky/market-microstructure-ml` |
 | Workload Identity Pool | `github-pool` |
 | OIDC Provider | `github-provider` |
@@ -141,7 +141,7 @@ gcloud projects add-iam-policy-binding ${PROJECT_ID} \
 
 ```bash
 PROJECT_ID="quotewatch-prod"
-PROJECT_NUMBER="<from step above>"
+PROJECT_NUMBER="275631345026"
 REPO="elinsky/market-microstructure-ml"
 
 gcloud iam service-accounts add-iam-policy-binding \
@@ -157,8 +157,8 @@ In GitHub repo settings (Settings > Secrets and variables > Actions > Variables)
 | Variable | Value |
 |----------|-------|
 | `GCP_PROJECT_ID` | `quotewatch-prod` |
-| `GCP_PROJECT_NUMBER` | *(from step above)* |
-| `WIF_PROVIDER` | `projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/github-pool/providers/github-provider` |
+| `GCP_PROJECT_NUMBER` | `275631345026` |
+| `WIF_PROVIDER` | `projects/275631345026/locations/global/workloadIdentityPools/github-pool/providers/github-provider` |
 | `WIF_SERVICE_ACCOUNT` | `github-deploy@quotewatch-prod.iam.gserviceaccount.com` |
 
 ---
