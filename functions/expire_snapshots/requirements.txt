@@ -1,0 +1,4 @@
+functions-framework==3.*
+pyiceberg[sql-postgres]>=0.7.0
+psycopg2-binary>=2.9
+gcsfs>=2024.2.0

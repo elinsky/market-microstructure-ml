@@ -5,8 +5,10 @@ How QuoteWatch is deployed to Google Cloud Run.
 ## Overview
 
 - **Hosting:** Google Cloud Run (us-central1)
+- **Storage:** GCS bucket for Iceberg warehouse, Cloud SQL Postgres for catalog
 - **CI/CD:** GitHub Actions (auto-deploy on merge to main)
 - **Authentication:** Workload Identity Federation (no service account keys)
+- **Infrastructure:** Terraform (local state)
 
 ## Auto-Deploy Pipeline
 
@@ -15,8 +17,9 @@ When a PR is merged to `main`:
 2. `lint` and `test` jobs run in parallel
 3. If both pass, `deploy` job runs
 4. Deploy job authenticates to GCP via Workload Identity Federation
-5. `gcloud run deploy` builds and deploys the container
-6. Cloud Run performs zero-downtime rolling deployment
+5. `gcloud functions deploy` deploys the snapshot expiration function
+6. `gcloud run deploy` builds and deploys the container
+7. Cloud Run performs zero-downtime rolling deployment
 
 On PRs, only `lint` and `test` run - no deployment.
 
@@ -53,7 +56,47 @@ gcloud run services update-traffic quotewatch \
 
 ---
 
-## GCP Infrastructure Setup
+## Production Infrastructure
+
+Managed via Terraform in `terraform/`. See `terraform/README.md` for details.
+
+### Resources
+
+| Resource | Description |
+|----------|-------------|
+| GCS Bucket | `gs://quotewatch-data/warehouse` - Iceberg Parquet files |
+| Cloud SQL | `quotewatch-iceberg` - Postgres 16 for Iceberg catalog |
+| Secret | `iceberg-catalog-uri` - Database connection string |
+| Cloud Function | `expire-snapshots` - Weekly snapshot expiration |
+| Cloud Scheduler | `expire-snapshots-weekly` - Triggers function at 4 AM UTC Sundays |
+
+### Connection
+
+Cloud Run connects to Cloud SQL via Unix socket (no VPC required):
+- Socket path: `/cloudsql/quotewatch-prod:us-central1:quotewatch-iceberg`
+- Connection string stored in Secret Manager, injected at runtime
+
+### Provisioning
+
+```bash
+cd terraform
+terraform init
+terraform apply
+```
+
+### Snapshot Expiration
+
+The `expire-snapshots` Cloud Function runs weekly to expire Iceberg snapshots older than 30 days. This prevents unbounded storage growth.
+
+- **Schedule:** 4 AM UTC every Sunday
+- **Tables:** raw_orderbook, raw_trades, features, predictions
+- **Retention:** 30 days
+
+The function is deployed automatically via CI on merge to main.
+
+---
+
+## Workload Identity Federation Setup
 
 One-time setup for Workload Identity Federation. This allows GitHub Actions to authenticate to GCP without service account keys.
 
@@ -135,6 +178,11 @@ gcloud projects add-iam-policy-binding ${PROJECT_ID} \
 gcloud projects add-iam-policy-binding ${PROJECT_ID} \
   --member="serviceAccount:github-deploy@${PROJECT_ID}.iam.gserviceaccount.com" \
   --role="roles/iam.serviceAccountUser"
+
+# Cloud Functions Developer - deploy functions
+gcloud projects add-iam-policy-binding ${PROJECT_ID} \
+  --member="serviceAccount:github-deploy@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/cloudfunctions.developer"
 ```
 
 ### 6. Allow GitHub Actions to Impersonate Service Account
