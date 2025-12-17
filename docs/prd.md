@@ -65,6 +65,16 @@ Basically: **streaming data -> features -> predictions -> trading decisions -> d
 | Replay historical data | Test models on past data | [#35](https://github.com/elinsky/market-microstructure-ml/issues/35) | done |
 | Multi-symbol (BTC + ETH) | Shows it's not hardcoded | - | - |
 
+### Observability
+
+| Want | Why | Epic | Status |
+|------|-----|------|--------|
+| Verify data capture completeness | Ensure no gaps before model training | [#71](https://github.com/elinsky/market-microstructure-ml/issues/71) | - |
+| Detect sequence gaps | Catch dropped messages in real-time | [#71](https://github.com/elinsky/market-microstructure-ml/issues/71) | - |
+| Pipeline latency metrics | Diagnose dashboard freezes | [#71](https://github.com/elinsky/market-microstructure-ml/issues/71) | - |
+| Buffer utilization tracking | Detect backpressure issues | [#71](https://github.com/elinsky/market-microstructure-ml/issues/71) | - |
+| Grafana dashboards | Visual monitoring, interview talking point | [#71](https://github.com/elinsky/market-microstructure-ml/issues/71) | - |
+
 ### Features
 
 | Want | Why | Epic | Status |
@@ -170,6 +180,7 @@ flowchart TB
         MLflow[MLflow]
         Tests[Tests]
         CICD[CI/CD]
+        Grafana[Grafana]
     end
 
     Data --> Features
@@ -215,7 +226,7 @@ General:
 | Deep learning | Transformer on LOB sequences |
 | RL | PPO/SAC trading agent |
 | Backtesting | Walk-forward validation |
-| MLOps | Cloud Run, MLflow, retraining pipeline |
+| MLOps | Cloud Run, MLflow, retraining pipeline, Grafana observability |
 | Software engineering | Tests, docs, clean code |
 | Math rigor | Proper metrics, statistical tests |
 | Domain knowledge | Microstructure, order flow, trading costs |
