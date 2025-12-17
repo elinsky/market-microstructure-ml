@@ -16,5 +16,25 @@ services:
       timeout: 5s
       retries: 5
 
+  # Run app in container for local/prod parity
+  # Usage: docker-compose --profile app up
+  app:
+    build: .
+    container_name: quotewatch-app
+    ports:
+      - "8050:8050"
+    environment:
+      - PORT=8050
+      - ENABLE_PERSISTENCE=true
+      - ICEBERG_CATALOG_URI=postgresql+psycopg2://postgres:localdev@postgres:5432/iceberg
+      - ICEBERG_WAREHOUSE=file:///data/warehouse
+    volumes:
+      - ./data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - app
+
 volumes:
   postgres_data:

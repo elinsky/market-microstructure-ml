@@ -95,6 +95,21 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Deploy Cloud Function (snapshot expiration)
+        run: |
+          gcloud functions deploy expire-snapshots \
+            --gen2 \
+            --runtime=python311 \
+            --region=us-central1 \
+            --source=functions/expire_snapshots \
+            --entry-point=expire_snapshots \
+            --trigger-http \
+            --no-allow-unauthenticated \
+            --memory=256MB \
+            --timeout=300s \
+            --set-env-vars=ICEBERG_WAREHOUSE=gs://quotewatch-data/warehouse \
+            --set-secrets=ICEBERG_CATALOG_URI=iceberg-catalog-uri:latest
+
       - name: Deploy to Cloud Run
         run: |
           gcloud run deploy quotewatch \
@@ -106,4 +121,8 @@ jobs:
             --min-instances 1 \
             --max-instances 1 \
             --timeout 3600 \
-            --concurrency 80
+            --concurrency 80 \
+            --add-cloudsql-instances quotewatch-prod:us-central1:quotewatch-iceberg \
+            --set-env-vars ENABLE_PERSISTENCE=true \
+            --set-env-vars ICEBERG_WAREHOUSE=gs://quotewatch-data/warehouse \
+            --set-secrets ICEBERG_CATALOG_URI=iceberg-catalog-uri:latest

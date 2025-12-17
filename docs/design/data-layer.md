@@ -440,8 +440,8 @@ Configuration is driven by environment variables (`ICEBERG_CATALOG_URI`, `ICEBER
 ## 8. Open Questions
 
 1. ~~**Exact depth?**~~ **Resolved:** 10 levels to start
-2. **Retention policy?** How long to keep data? (Maybe 30 days to start)
-3. **GCS bucket setup?** Need to create bucket, set up auth for Cloud Run
+2. ~~**Retention policy?**~~ **Resolved:** 30 days snapshot retention
+3. ~~**GCS bucket setup?**~~ **Resolved:** Terraform provisions bucket, Cloud Run auth via service account
 4. ~~**Catalog in prod?**~~ **Resolved:** Postgres everywhere (Docker locally, Cloud SQL in prod)
 
 ---
@@ -715,3 +715,47 @@ Configuration is driven by environment variables (`ICEBERG_CATALOG_URI`, `ICEBER
 - Always sort results by `timestamp_ms` for guaranteed chronological order (Iceberg scan doesn't guarantee row order)
 - Return dataclasses (not raw dicts) for type safety and consistency with live pipeline
 - Date filtering converts `date` to timestamp_ms range (start of day → end of day UTC)
+
+### Step 10: Add GCS backend for production (Issue #51)
+
+**Status:** Complete
+
+**What was implemented:**
+
+1. **Terraform infrastructure** (`terraform/`)
+   - GCS bucket `quotewatch-data` with versioning for Iceberg Parquet files
+   - Cloud SQL Postgres 16 (`db-f1-micro`) for Iceberg catalog
+   - Secret Manager secret `iceberg-catalog-uri` with Unix socket connection string
+   - IAM bindings for default compute service account (storage, cloudsql, secrets)
+   - Cloud Scheduler job `expire-snapshots-weekly` (4 AM UTC Sundays)
+   - APIs enabled: sqladmin, secretmanager, cloudscheduler, cloudfunctions, cloudbuild
+
+2. **Snapshot expiration** (`functions/expire_snapshots/`)
+   - Cloud Function (2nd gen) to expire snapshots older than 30 days
+   - Deployed automatically via CI on merge to main
+   - Triggered weekly by Cloud Scheduler with OIDC authentication
+
+3. **CI/CD updates** (`.github/workflows/ci.yml`)
+   - Deploy step now deploys Cloud Function before Cloud Run
+   - Cloud Run configured with `--add-cloudsql-instances` for Unix socket
+   - Environment variables: `ENABLE_PERSISTENCE=true`, `ICEBERG_WAREHOUSE=gs://...`
+   - Secret injection: `ICEBERG_CATALOG_URI` from Secret Manager
+
+4. **Local parity** (`docker-compose.yml`)
+   - Added `app` service with profile for running in container
+   - Same environment variables as production (different values)
+   - Usage: `docker-compose --profile app up`
+
+5. **Dependencies** (`pyproject.toml`)
+   - Added `gcsfs>=2024.2.0` for GCS filesystem support
+
+6. **Documentation**
+   - Updated `docs/deployment.md` with production infrastructure section
+   - Created `terraform/README.md` with provisioning instructions
+
+**Design decisions:**
+- Unix socket connection (no VPC required) - Cloud Run connects via `/cloudsql/CONNECTION_NAME`
+- Public IP enabled on Cloud SQL but no authorized networks (locked down, socket-only access)
+- Terraform with local state (simple for single-developer project)
+- Cloud Function deployed via CI (not Terraform) for simpler management
+- 30-day snapshot retention to balance storage costs and time-travel capability
